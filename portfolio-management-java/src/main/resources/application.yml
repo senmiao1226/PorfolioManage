@@ -29,7 +29,21 @@ app:
   cors:
     allowed-origins: "http://localhost:5173,http://127.0.0.1:5173"
   pricing:
+    # 主数据源：Massive.com (专业的金融市场数据 API)
+    # 官网：https://massive.com
+    # 文档：https://docs.massive.com
+    # GitHub: https://github.com/massive-com
+    massive-base: "https://api.massive.com/v1"
+    massive-api-key: "HLPOYd_lJllASYZ4THMrgvNrlPNYQ2T0"  # 请在 https://massive.com 注册获取
+    # 备用数据源：Alpha Vantage
+    alpha-vantage-base: "https://www.alphavantage.co/query"
+    alpha-vantage-api-key: "PH6U2KRY55T7M39T"  # 免费注册获取：https://www.alphavantage.co/support/#api-key
+    # 备用数据源：新浪财经
+    sina-base: "https://hq.sinajs.cn"
+    # 原始课程缓存接口（保留）
     cached-price-base: "https://c4rm9elh30.execute-api.us-east-1.amazonaws.com/default/cachedPriceData"
+    # 数据源优先级：massive > alphavantage > sina > yahoo > cached
+    providers: "massive,alphavantage,sina,yahoo,cached"
 
 springdoc:
   api-docs:

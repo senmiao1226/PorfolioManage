@@ -35,10 +35,13 @@ public class WebConfig implements WebMvcConfigurer {
                                 .toList());
         if (origins.isEmpty()) {
             origins.add("http://localhost:5173");
+            origins.add("http://127.0.0.1:5173");
         }
-        config.setAllowedOriginPatterns(origins);
+        // 使用 setAllowedOrigins 而不是 setAllowedOriginPatterns 以支持凭证
+        config.setAllowedOrigins(origins);
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
+        config.setMaxAge(3600L);  // 预检请求缓存 1 小时
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);

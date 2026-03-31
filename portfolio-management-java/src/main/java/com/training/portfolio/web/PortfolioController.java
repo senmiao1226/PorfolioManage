@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/portfolios")
+@RequestMapping("/api/portfolios")
 @RequiredArgsConstructor
 public class PortfolioController {
 
@@ -60,12 +60,23 @@ public class PortfolioController {
 
     @GetMapping("/{id}/summary")
     public PortfolioDtos.PortfolioSummaryResponse summary(@PathVariable Long id) {
+        System.out.println("\n========== [Controller 接收请求] ==========");
+        System.out.println("[DEBUG] 接口：GET /portfolios/" + id + "/summary");
+        System.out.println("[DEBUG] Portfolio ID: " + id);
+        System.out.println("============================================\n");
+        
         return portfolioService.getSummary(id);
     }
 
     @GetMapping("/{id}/performance")
     public PortfolioDtos.PerformanceSeriesResponse performance(
             @PathVariable Long id, @RequestParam(defaultValue = "30") int days) {
+        System.out.println("\n========== [Controller 接收请求] ==========");
+        System.out.println("[DEBUG] 接口：GET /portfolios/" + id + "/performance");
+        System.out.println("[DEBUG] Portfolio ID: " + id);
+        System.out.println("[DEBUG] Days: " + days);
+        System.out.println("============================================\n");
+        
         return portfolioService.getPerformance(id, days);
     }
 }
