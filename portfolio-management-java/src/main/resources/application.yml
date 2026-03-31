@@ -1,0 +1,38 @@
+# 首次使用请先执行建库脚本：sql/init_portfolio_db.sql（项目根下 portfolio-management-java/sql/）
+# Python 示例后端已停用，见 portfolio-management-app/backend/（依赖与入口已注释）
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: portfolio-api
+  datasource:
+    # 与 Workbench 中「localhost / 127.0.0.1:3306 / root」一致；可用环境变量覆盖
+    # MYSQL_HOST MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD
+    # characterEncoding 须为 UTF-8（库字符集仍可用 utf8mb4，见 sql/init_portfolio_db.sql）
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:portfolio_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      # 开发：自动建/改表；上线请改为 validate 或 none 并用 Flyway/Liquibase
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+app:
+  cors:
+    allowed-origins: "http://localhost:5173,http://127.0.0.1:5173"
+  pricing:
+    cached-price-base: "https://c4rm9elh30.execute-api.us-east-1.amazonaws.com/default/cachedPriceData"
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,7 @@
+-- Python 示例后端已停用；建库请使用 Java 项目脚本：
+-- portfolio-management-java/sql/init_portfolio_db.sql
+--
+-- （以下为原脚本，保留注释备查）
+-- CREATE DATABASE IF NOT EXISTS portfolio_db
+--   CHARACTER SET utf8mb4
+--   COLLATE utf8mb4_unicode_ci;
