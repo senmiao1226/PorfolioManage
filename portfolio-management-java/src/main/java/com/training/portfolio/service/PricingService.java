@@ -129,12 +129,26 @@ public class PricingService {
         }
         
         String t = ticker.trim().toUpperCase();
+        
+        // 【优先检查内存缓存】如果 5 分钟内查询过，直接返回，不再请求任何 API
+        CacheEntry<Double> cached = priceCache.get("cached:" + t);
+        if (cached != null && isFresh(cached.createdAtMs, PRICE_CACHE_TTL_MS)) {
+            System.out.println("\n========== [价格查询 - 使用内存缓存] ==========");
+            System.out.println("[DEBUG] 股票：" + t);
+            System.out.println("[DEBUG] ✓ 从内存缓存中获取价格（5 分钟内已查询过）");
+            System.out.println("[DEBUG] 价格：" + cached.value);
+            System.out.println("[DEBUG] 不再发送任何 API 请求");
+            System.out.println("============================================\n");
+            return Optional.ofNullable(cached.value);
+        }
+        
         String[] providers = appProperties.getPricing().getProviders().split(",");
         
         System.out.println("\n========== [价格查询开始] ==========");
         System.out.println("[DEBUG] 查询股票：" + t);
         System.out.println("[DEBUG] 使用前一天收盘价（非实时价格）");
         System.out.println("[DEBUG] 数据源优先级：" + String.join(" > ", providers));
+        System.out.println("[DEBUG] 内存缓存：未命中，需要查询 API");
         System.out.println("============================================\n");
         
         // 按优先级尝试各个数据源
@@ -153,8 +167,11 @@ public class PricingService {
                 System.out.println("\n========== [价格查询成功] ==========");
                 System.out.println("[DEBUG] ✓ 数据源 [" + provider.trim() + "] 成功获取到前一天收盘价");
                 System.out.println("[DEBUG] 价格：" + price.get());
+                System.out.println("[DEBUG] 已将价格存入内存缓存（有效期 5 分钟）");
                 System.out.println("[DEBUG] 不再请求其他数据源");
                 System.out.println("============================================\n");
+                // 将获取到的价格存入内存缓存
+                priceCache.put("cached:" + t, new CacheEntry<>(price.get(), System.currentTimeMillis()));
                 return price;
             } else {
                 System.out.println("[DEBUG] ✗ 数据源 [" + provider.trim() + "] 未获取到价格，尝试下一个...");
@@ -338,15 +355,17 @@ public class PricingService {
         
         try {
             System.out.println("[DEBUG] 发送 HTTP GET 请求...");
-            // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 ");
-            headers.set("Referer", "https://finance.sina.com.cn/");
-            headers.set("Accept", "*/*");
+            System.out.println("[DEBUG] 设置请求头...");
+            System.out.println("  - User-Agent: Mozilla/5.0 ");
+            System.out.println("  - Referer: https://finance.sina.com.cn/");
+            System.out.println("  - Accept: */*");
             
+            // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
             String body = restClient.get()
                 .uri(url)
-                .headers(h -> h.addAll(headers))
+                .header("User-Agent", "Mozilla/5.0 ")
+                .header("Referer", "https://finance.sina.com.cn/")
+                .header("Accept", "*/*")
                 .retrieve()
                 .body(String.class);
             
@@ -464,6 +483,12 @@ public class PricingService {
             
             System.out.println("[DEBUG] ✗ Massive.com 未找到有效收盘价");
             System.out.println("============================================\n");
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            // 404 错误：股票不存在或数据不可用
+            System.out.println("[DEBUG] ✗ Massive.com 404 错误：该股票不存在或数据不可用");
+            System.out.println("[DEBUG] 错误信息：" + e.getMessage());
+            System.out.println("============================================\n");
+            return Optional.empty();
         } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
             // 429 错误：请求频率超限
             System.out.println("[DEBUG] ✗ Massive.com 429 错误：请求频率超限，请稍后重试");
@@ -536,17 +561,34 @@ public class PricingService {
         System.out.println("[DEBUG] 尝试从新浪财经获取 " + ticker + " 的前一天收盘价...");
         System.out.println("[DEBUG] 原始 ticker: " + ticker);
         
-        if (ticker.matches("\\d{6}")) {
-            // A 股代码，需要添加市场前缀
-            String prefix = ticker.startsWith("6") || ticker.startsWith("9") ? "sh" : "sz";
-            symbol = prefix + ticker;
-            System.out.println("[DEBUG] 识别为 A 股，添加前缀：" + prefix);
-        } else if (ticker.matches("\\d{4,5}")) {
-            // 港股代码（4-5 位数字）
-            symbol = "hk" + ticker;
-            System.out.println("[DEBUG] 识别为港股，添加前缀：hk");
+        // 处理多种输入格式：600519, SH600519, sh600519, 000001, SZ000001 等
+        String cleanTicker = ticker.trim().toUpperCase();
+        
+        // 如果已经包含前缀，提取纯数字部分
+        if (cleanTicker.matches("^(SH|SZ|HK)\\d{4,6}$")) {
+            String prefix = cleanTicker.substring(0, 2).toLowerCase();
+            String digits = cleanTicker.substring(2);
+            
+            if (digits.length() == 6) {
+                // A 股（6 位数字）
+                symbol = prefix + digits;
+                System.out.println("[DEBUG] 识别为带前缀的 A 股/港股代码，标准化为：" + symbol);
+            } else if (digits.length() >= 4 && digits.length() <= 5) {
+                // 港股（4-5 位数字）
+                symbol = "hk" + digits;
+                System.out.println("[DEBUG] 识别为港股代码，标准化为：" + symbol);
+            }
+        } else if (cleanTicker.matches("\\d{6}")) {
+            // 纯 6 位数字 - A 股
+            String prefix = cleanTicker.startsWith("6") || cleanTicker.startsWith("9") ? "sh" : "sz";
+            symbol = prefix + cleanTicker;
+            System.out.println("[DEBUG] 识别为 A 股（纯 6 位数字），添加前缀：" + prefix + "，最终：" + symbol);
+        } else if (cleanTicker.matches("\\d{4,5}")) {
+            // 纯 4-5 位数字 - 港股
+            symbol = "hk" + cleanTicker;
+            System.out.println("[DEBUG] 识别为港股（纯 4-5 位数字），添加前缀：hk，最终：" + symbol);
         } else {
-            System.out.println("[DEBUG] 使用原始 ticker: " + symbol);
+            System.out.println("[DEBUG] 使用原始 ticker（可能是美股或其他）: " + symbol);
         }
         
         // 新浪财经 URL 格式：http://hq.sinajs.cn/list=sz000001
@@ -557,16 +599,17 @@ public class PricingService {
         
         try {
             System.out.println("[DEBUG] 发送 HTTP GET 请求...");
-            // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0");
-            headers.set("Referer", "https://finance.sina.com.cn/");
-            headers.set("Accept", "*/*");
-
+            System.out.println("[DEBUG] 设置请求头...");
+            System.out.println("  - User-Agent: Mozilla/5.0");
+            System.out.println("  - Referer: https://finance.sina.com.cn/");
+            System.out.println("  - Accept: */*");
             
+            // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
             String body = restClient.get()
                 .uri(url)
-                .headers(h -> h.addAll(headers))
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "https://finance.sina.com.cn/")
+                .header("Accept", "*/*")
                 .retrieve()
                 .body(String.class);
             
@@ -600,12 +643,20 @@ public class PricingService {
                         }
                     } else {
                         System.out.println("[DEBUG] ✗ 新浪财经响应格式错误，字段数不足：" + parts.length);
+                        System.out.println("[DEBUG] 可能原因：");
+                        System.out.println("  1. 股票代码不存在或已退市");
+                        System.out.println("  2. 股票代码格式不正确");
+                        System.out.println("  3. API 请求过于频繁被限流");
                     }
                 } else {
                     System.out.println("[DEBUG] ✗ 新浪财经响应中没有找到引号包裹的数据");
                 }
             } else {
                 System.out.println("[DEBUG] ✗ 新浪财经返回空响应");
+                System.out.println("[DEBUG] 可能原因：");
+                System.out.println("  1. 股票代码格式错误（应为 sh600519 或 sz000001）");
+                System.out.println("  2. 该股票不存在或已退市");
+                System.out.println("  3. 网络问题或 API 限流");
             }
         } catch (Exception e) {
             System.out.println("[DEBUG] ✗ 新浪财经请求失败：" + e.getMessage());
