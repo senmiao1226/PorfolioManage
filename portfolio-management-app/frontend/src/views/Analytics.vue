@@ -211,6 +211,7 @@ const padding = { top: 20, right: 20, bottom: 30, left: 60 };
 const colors = {
   'stock': '#4f46e5',
   'bond': '#06b6d4',
+  'fund': '#f59e0b',
   'cash': '#10b981',
   'default': '#8b5cf6'
 };
@@ -233,6 +234,7 @@ function formatAssetType(type) {
   const map = {
     'stock': '股票',
     'bond': '债券',
+    'fund': '基金',
     'cash': '现金'
   };
   return map[type] || type;

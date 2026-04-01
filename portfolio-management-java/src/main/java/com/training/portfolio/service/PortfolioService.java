@@ -81,29 +81,83 @@ public class PortfolioService {
         if (req.quantity() == null || req.quantity() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "quantity must be positive");
         }
-        if (req.averageCost() == null || req.averageCost() < 0) {
+        // averageCost 可以为 null 或 0，系统会自动查询历史价格填充
+        if (req.averageCost() != null && req.averageCost() < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "averageCost must be >= 0");
         }
         Portfolio p = portfolioRepository.findById(portfolioId).orElseThrow(() -> notFound("Portfolio not found"));
         validateCreate(req);
         
-        // 如果是股票或债券，尝试获取当前市场价格（仅查询当前添加的股票，避免 API 限制）
+        // 如果是股票、债券或基金，尝试获取当前市场价格（带货币换算）
         Double marketPrice = null;
-        if ((req.assetType() == AssetType.stock || req.assetType() == AssetType.bond) 
+        if ((req.assetType() == AssetType.stock || req.assetType() == AssetType.bond || req.assetType() == AssetType.fund)
             && req.ticker() != null && !req.ticker().isBlank()) {
             System.out.println("\n========== [添加持仓 - 获取市价] ==========");
             System.out.println("[DEBUG] 持仓类型：" + req.assetType());
             System.out.println("[DEBUG] 股票代码：" + req.ticker());
+            System.out.println("[DEBUG] 组合本币：" + p.getBaseCurrency());
             System.out.println("[DEBUG] 尝试获取市场价格...");
             
-            Optional<Double> priceOpt = pricingService.priceForHolding(req.assetType(), req.ticker());
+            Optional<Double> priceOpt = pricingService.priceForHoldingWithCurrency(
+                req.assetType(), req.ticker(), p.getBaseCurrency());
             if (priceOpt.isPresent()) {
                 marketPrice = priceOpt.get();
-                System.out.println("[DEBUG] ✓ 成功获取市场价格：" + marketPrice);
+                System.out.println("[DEBUG] ✓ 成功获取市场价格（已换算）：" + marketPrice + " " + p.getBaseCurrency());
             } else {
                 System.out.println("[DEBUG] ✗ 未能获取市场价格，将为空");
             }
             System.out.println("============================================\n");
+        }
+        
+        // 处理成本价：如果提供了purchaseDate但没有提供averageCost，查询历史价格；否则对用户输入的成本价进行汇率换算
+        Double averageCost = req.averageCost();
+        String baseCurrency = p.getBaseCurrency();
+        
+        if ((req.assetType() == AssetType.stock || req.assetType() == AssetType.bond || req.assetType() == AssetType.fund)
+            && req.ticker() != null && !req.ticker().isBlank()) {
+            
+            if (averageCost == null || averageCost == 0) {
+                // 没有提供成本价，尝试查询历史价格
+                if (req.purchaseDate() != null) {
+                    System.out.println("\n========== [添加持仓 - 查询历史成交价] ==========");
+                    System.out.println("[DEBUG] 股票代码: " + req.ticker());
+                    System.out.println("[DEBUG] 购入日期: " + req.purchaseDate());
+                    System.out.println("[DEBUG] 组合本币: " + baseCurrency);
+                    
+                    Optional<Double> historicalPrice = pricingService.fetchHistoricalPriceWithCurrency(
+                        req.ticker(), req.purchaseDate(), baseCurrency);
+                    if (historicalPrice.isPresent()) {
+                        averageCost = historicalPrice.get();
+                        System.out.println("[DEBUG] ✓ 成功获取历史价格作为成交价: " + averageCost + " " + baseCurrency);
+                    } else {
+                        System.out.println("[DEBUG] ✗ 未能获取历史价格，需要手动输入成交价");
+                    }
+                    System.out.println("============================================\n");
+                }
+            } else {
+                // 用户提供了成本价，需要进行汇率换算
+                System.out.println("\n========== [添加持仓 - 成本价汇率换算] ==========");
+                System.out.println("[DEBUG] 股票代码: " + req.ticker());
+                System.out.println("[DEBUG] 原始成本价: " + averageCost);
+                System.out.println("[DEBUG] 组合本币: " + baseCurrency);
+                
+                // 检测股票所属市场的货币
+                String sourceCurrency = pricingService.detectSourceCurrency(req.ticker());
+                if (!sourceCurrency.equalsIgnoreCase(baseCurrency)) {
+                    double convertedCost = pricingService.convertCurrency(averageCost, sourceCurrency, baseCurrency);
+                    System.out.println("[DEBUG] 原始货币: " + sourceCurrency);
+                    System.out.println("[DEBUG] 汇率: " + pricingService.getExchangeRate(sourceCurrency, baseCurrency));
+                    System.out.println("[DEBUG] 换算后成本价: " + convertedCost + " " + baseCurrency);
+                    averageCost = convertedCost;
+                } else {
+                    System.out.println("[DEBUG] 成本价货币与组合本币相同，无需换算");
+                }
+                System.out.println("============================================\n");
+            }
+        }
+        
+        if (averageCost == null) {
+            averageCost = 0.0;
         }
         
         Holding h = new Holding();
@@ -112,7 +166,8 @@ public class PortfolioService {
         h.setTicker(normalizeTicker(req.ticker()));
         h.setName(req.name());
         h.setQuantity(req.quantity());
-        h.setAverageCost(req.averageCost());
+        h.setAverageCost(averageCost);
+        h.setPurchaseDate(req.purchaseDate());
         h.setNotes(req.notes());
         h = holdingRepository.save(h);
         
@@ -126,6 +181,7 @@ public class PortfolioService {
                 h.getQuantity(),
                 h.getAverageCost(),
                 marketPrice,
+                h.getPurchaseDate(),
                 h.getNotes());
     }
 
@@ -145,6 +201,9 @@ public class PortfolioService {
         }
         if (req.averageCost() != null) {
             h.setAverageCost(req.averageCost());
+        }
+        if (req.purchaseDate() != null) {
+            h.setPurchaseDate(req.purchaseDate());
         }
         if (req.notes() != null) {
             h.setNotes(req.notes());
@@ -171,11 +230,14 @@ public class PortfolioService {
         List<PortfolioDtos.HoldingValuation> hv = new ArrayList<>();
         double totalCost = 0.0;
         List<Double> navParts = new ArrayList<>();
+        String baseCurrency = p.getBaseCurrency();
 
         for (Holding h : holdings) {
             double costBasis = round4(h.getQuantity() * h.getAverageCost());
             totalCost += costBasis;
-            Optional<Double> mpOpt = pricingService.priceForHolding(h.getAssetType(), h.getTicker());
+            // 使用带货币换算的价格查询
+            Optional<Double> mpOpt = pricingService.priceForHoldingWithCurrency(
+                h.getAssetType(), h.getTicker(), baseCurrency);
             Double marketPrice;
             Double marketValue;
             Double unrealized;
@@ -245,12 +307,13 @@ public class PortfolioService {
                         .sum();
         List<Map.Entry<String, Double>> tickerQty = new ArrayList<>();
         for (Holding h : holdings) {
-            if ((h.getAssetType() == AssetType.stock || h.getAssetType() == AssetType.bond)
+            if ((h.getAssetType() == AssetType.stock || h.getAssetType() == AssetType.bond || h.getAssetType() == AssetType.fund)
                     && h.getTicker() != null
                     && !h.getTicker().isBlank()) {
                 tickerQty.add(Map.entry(h.getTicker().trim().toUpperCase(), h.getQuantity()));
             }
         }
+        // TODO: portfolioValueSeries 也需要支持货币换算
         List<DateValue> series = pricingService.portfolioValueSeries(tickerQty, cashTotal, days);
         List<PortfolioDtos.PerformancePoint> points =
                 series.stream()
@@ -268,9 +331,9 @@ public class PortfolioService {
     }
 
     private void validateCreate(PortfolioDtos.HoldingCreateRequest req) {
-        if (req.assetType() == AssetType.stock || req.assetType() == AssetType.bond) {
+        if (req.assetType() == AssetType.stock || req.assetType() == AssetType.bond || req.assetType() == AssetType.fund) {
             if (req.ticker() == null || req.ticker().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ticker is required for stock and bond");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ticker is required for stock, bond and fund");
             }
         }
     }
@@ -304,6 +367,7 @@ public class PortfolioService {
                 h.getQuantity(),
                 h.getAverageCost(),
                 null,  // marketPrice 仅在添加持仓时返回，列表查询时不返回以避免频繁 API 调用
+                h.getPurchaseDate(),
                 h.getNotes());
     }
 

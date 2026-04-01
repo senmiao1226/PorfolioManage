@@ -27,6 +27,7 @@ public final class PortfolioDtos {
             Double quantity,
             Double averageCost,
             Double marketPrice,
+            LocalDate purchaseDate,
             String notes) {}
 
     public record PortfolioDetailResponse(
@@ -43,6 +44,7 @@ public final class PortfolioDtos {
             String name,
             Double quantity,
             Double averageCost,
+            LocalDate purchaseDate,
             String notes) {}
 
     public record HoldingUpdateRequest(
@@ -51,6 +53,7 @@ public final class PortfolioDtos {
             String name,
             Double quantity,
             Double averageCost,
+            LocalDate purchaseDate,
             String notes) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -2,11 +2,15 @@ package com.training.portfolio.web;
 
 import com.training.portfolio.dto.MarketDtos;
 import com.training.portfolio.service.MarketService;
+import com.training.portfolio.service.PricingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * 市场行情控制器
@@ -19,6 +23,7 @@ import java.util.List;
 public class MarketController {
 
     private final MarketService marketService;
+    private final PricingService pricingService;
 
     /**
      * 获取指定组合的持仓股票行情
@@ -137,5 +142,42 @@ public class MarketController {
     public ResponseEntity<List<MarketDtos.DataProviderDto>> getDataProviders() {
         List<MarketDtos.DataProviderDto> providers = marketService.getDataProviders();
         return ResponseEntity.ok(providers);
+    }
+
+    /**
+     * 查询历史价格（用于填充成交价）
+     *
+     * @param ticker 股票代码
+     * @param date 日期（格式：yyyy-MM-dd）
+     * @return 历史价格
+     */
+    @GetMapping("/historical-price")
+    public ResponseEntity<Map<String, Object>> getHistoricalPrice(
+            @RequestParam String ticker,
+            @RequestParam String date) {
+        try {
+            LocalDate queryDate = LocalDate.parse(date);
+            Optional<Double> price = pricingService.fetchHistoricalPrice(ticker, queryDate);
+            if (price.isPresent()) {
+                return ResponseEntity.ok(Map.of(
+                    "ticker", ticker,
+                    "date", date,
+                    "price", price.get(),
+                    "found", true
+                ));
+            } else {
+                return ResponseEntity.ok(Map.of(
+                    "ticker", ticker,
+                    "date", date,
+                    "price", null,
+                    "found", false,
+                    "message", "未找到该日期的价格数据"
+                ));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "查询失败: " + e.getMessage()
+            ));
+        }
     }
 }

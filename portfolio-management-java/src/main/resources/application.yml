@@ -44,6 +44,18 @@ app:
     cached-price-base: "https://c4rm9elh30.execute-api.us-east-1.amazonaws.com/default/cachedPriceData"
     # 数据源优先级：massive > alphavantage > sina > cached
     providers: "cached,massive,alphavantage,sina"
+  # 汇率配置（可选，不配置则使用 AppProperties 中的默认值）
+  exchange-rate:
+    usd-to-cny: 7.25    # 1 美元 = 7.25 人民币
+    usd-to-eur: 0.93    # 1 美元 = 0.93 欧元
+    cny-to-usd: 0.138   # 1 人民币 = 0.138 美元
+    cny-to-eur: 0.128   # 1 人民币 = 0.128 欧元
+    eur-to-usd: 1.08    # 1 欧元 = 1.08 美元
+    eur-to-cny: 7.80    # 1 欧元 = 7.80 人民币
+    hkd-to-cny: 0.92    # 1 港币 = 0.92 人民币
+    cny-to-hkd: 1.09    # 1 人民币 = 1.09 港币
+    hkd-to-usd: 0.13    # 1 港币 = 0.13 美元
+    usd-to-hkd: 7.80    # 1 美元 = 7.80 港币
 
 springdoc:
   api-docs:

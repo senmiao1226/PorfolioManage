@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -45,6 +46,9 @@ public class Holding {
 
     @Column(name = "average_cost", nullable = false)
     private Double averageCost;
+
+    @Column(name = "purchase_date")
+    private LocalDate purchaseDate;
 
     @Column(length = 2000)
     private String notes;

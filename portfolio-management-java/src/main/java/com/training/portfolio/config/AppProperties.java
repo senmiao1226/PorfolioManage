@@ -9,6 +9,7 @@ public class AppProperties {
 
     private Cors cors = new Cors();
     private Pricing pricing = new Pricing();
+    private ExchangeRate exchangeRate = new ExchangeRate();
 
     @Data
     public static class Cors {
@@ -26,5 +27,23 @@ public class AppProperties {
         private String alphaVantageApiKey = "demo";
         private String sinaBase = "https://hq.sinajs.cn";
         private String providers = "massive,alphavantage,sina,cached";
+        // 汇率API配置（使用Alpha Vantage的外汇接口）
+        private String exchangeRateApiKey = "demo";
+    }
+
+    @Data
+    public static class ExchangeRate {
+        // 固定汇率配置（当 API 不可用时使用）
+        private double usdToCny = 7.2;
+        private double usdToEur = 0.92;
+        private double cnyToUsd = 0.139;
+        private double cnyToEur = 0.128;
+        private double eurToUsd = 1.09;
+        private double eurToCny = 7.83;
+        // 港币汇率（港币联系汇率制）
+        private double hkdToCny = 0.92;
+        private double cnyToHkd = 1.09;
+        private double hkdToUsd = 0.13;
+        private double usdToHkd = 7.80;
     }
 }

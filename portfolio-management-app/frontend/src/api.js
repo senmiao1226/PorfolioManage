@@ -92,6 +92,9 @@ export const api = {
   getTopGainers: (portfolioId, topN = 5) => req(`/market/movers/gainers/${portfolioId}?topN=${topN}`),
   getTopLosers: (portfolioId, topN = 5) => req(`/market/movers/losers/${portfolioId}?topN=${topN}`),
   getDataProviders: () => req("/market/providers"),
+  // 查询历史价格（用于填充成交价）
+  getHistoricalPrice: (ticker, date) => 
+    req(`/market/historical-price?ticker=${ticker}&date=${date}`),
 
   // Analytics 分析接口
   getAssetAllocation: (portfolioId) => req(`/analytics/allocation/${portfolioId}`),

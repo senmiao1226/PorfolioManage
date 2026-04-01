@@ -790,4 +790,262 @@ public class PricingService {
     private static double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
     }
+
+    // ========== 汇率换算功能 ==========
+
+    /**
+     * 获取汇率（从 fromCurrency 到 toCurrency）
+     * 优先使用固定汇率配置，简化实现
+     */
+    public double getExchangeRate(String fromCurrency, String toCurrency) {
+        if (fromCurrency == null || toCurrency == null || fromCurrency.equalsIgnoreCase(toCurrency)) {
+            return 1.0;
+        }
+        String from = fromCurrency.toUpperCase();
+        String to = toCurrency.toUpperCase();
+        
+        // 使用配置中的固定汇率
+        AppProperties.ExchangeRate rates = appProperties.getExchangeRate();
+        return switch (from + "_" + to) {
+            case "USD_CNY" -> rates.getUsdToCny();
+            case "USD_EUR" -> rates.getUsdToEur();
+            case "CNY_USD" -> rates.getCnyToUsd();
+            case "CNY_EUR" -> rates.getCnyToEur();
+            case "EUR_USD" -> rates.getEurToUsd();
+            case "EUR_CNY" -> rates.getEurToCny();
+            // 港币汇率（从配置读取）
+            case "HKD_CNY" -> rates.getHkdToCny();
+            case "CNY_HKD" -> rates.getCnyToHkd();
+            case "HKD_USD" -> rates.getHkdToUsd();
+            case "USD_HKD" -> rates.getUsdToHkd();
+            default -> {
+                System.out.println("[DEBUG] ⚠ 未找到汇率配置：" + from + " -> " + to + "，返回 1.0");
+                yield 1.0;  // 不支持的货币对，直接返回 1.0，避免无限递归
+            }
+        };
+    }
+
+    /**
+     * 将价格从数据源货币转换为目标货币
+     * @param price 原始价格
+     * @param sourceCurrency 数据源货币（USD/CNY等）
+     * @param targetCurrency 目标货币
+     */
+    public double convertCurrency(double price, String sourceCurrency, String targetCurrency) {
+        if (sourceCurrency == null || targetCurrency == null || 
+            sourceCurrency.equalsIgnoreCase(targetCurrency)) {
+            return price;
+        }
+        double rate = getExchangeRate(sourceCurrency, targetCurrency);
+        return round2(price * rate);
+    }
+
+    /**
+     * 根据数据源判断货币类型
+     * Massive/Alpha Vantage -> USD
+     * 新浪财经 -> CNY
+     */
+    public String detectCurrencyBySource(String provider) {
+        return switch (provider.trim().toLowerCase()) {
+            case "sina" -> "CNY";
+            case "massive", "alpha-vantage", "cached" -> "USD";
+            default -> "USD";
+        };
+    }
+
+    /**
+     * 带货币换算的价格查询（用于基金、股票、债券）
+     * @param assetType 资产类型
+     * @param ticker 代码
+     * @param targetCurrency 目标货币（组合本币）
+     * @return 换算后的价格
+     */
+    public Optional<Double> priceForHoldingWithCurrency(AssetType assetType, String ticker, String targetCurrency) {
+        // cash 直接返回 1.0，不需要换算
+        if (assetType == AssetType.cash) {
+            return Optional.of(1.0);
+        }
+        
+        Optional<Double> priceOpt = priceForHolding(assetType, ticker);
+        if (priceOpt.isEmpty() || targetCurrency == null) {
+            return priceOpt;
+        }
+        
+        double originalPrice = priceOpt.get();
+        
+        // 根据成功查询的数据源确定原始货币
+        // 简化处理：尝试查询并记录哪个数据源成功
+        String sourceCurrency = detectSourceCurrency(ticker);
+        
+        if (sourceCurrency.equalsIgnoreCase(targetCurrency)) {
+            return Optional.of(originalPrice);
+        }
+        
+        double convertedPrice = convertCurrency(originalPrice, sourceCurrency, targetCurrency);
+        System.out.println("\n========== [货币换算] ==========");
+        System.out.println("[DEBUG] 原始价格: " + originalPrice + " " + sourceCurrency);
+        System.out.println("[DEBUG] 目标货币: " + targetCurrency);
+        System.out.println("[DEBUG] 汇率: " + getExchangeRate(sourceCurrency, targetCurrency));
+        System.out.println("[DEBUG] 换算后: " + convertedPrice + " " + targetCurrency);
+        System.out.println("================================\n");
+        
+        return Optional.of(convertedPrice);
+    }
+
+    /**
+     * 检测股票代码所属市场，返回对应货币
+     */
+    public String detectSourceCurrency(String ticker) {
+        String t = ticker.toUpperCase();
+        // A股代码特征：6位数字，sh/sz开头
+        if (t.matches("^\\d{6}$") || t.matches("^(SH|SZ)\\d{6}$")) {
+            return "CNY";
+        }
+        // 港股代码特征：4-5位数字，hk开头
+        if (t.matches("^\\d{4,5}$") || t.matches("^HK\\d{4,5}$")) {
+            return "HKD"; // 港股用港币，但新浪财经返回的人民币价格
+        }
+        // 默认美股等用 USD
+        return "USD";
+    }
+
+    // ========== 历史价格查询（用于填充成交价） ==========
+
+    /**
+     * 查询指定日期的历史收盘价（优先使用 Massive API）
+     * URL格式: https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/year/{startDate}/{endDate}?adjusted=true&sort=asc&limit=120&apiKey={apiKey}
+     * @param ticker 股票代码
+     * @param date 日期
+     * @return 该日期的收盘价
+     */
+    public Optional<Double> fetchHistoricalPrice(String ticker, LocalDate date) {
+        if (ticker == null || ticker.isBlank() || date == null) {
+            return Optional.empty();
+        }
+        
+        String t = ticker.trim().toUpperCase();
+        System.out.println("\n========== [历史价格查询 - Massive API] ==========");
+        System.out.println("[DEBUG] 股票代码: " + t);
+        System.out.println("[DEBUG] 查询日期: " + date);
+        
+        // 优先使用 Massive API 查询历史价格
+        Optional<Double> massivePrice = fetchMassiveHistoricalPrice(t, date);
+        if (massivePrice.isPresent()) {
+            return massivePrice;
+        }
+        
+        // Massive 失败，回退到 cachedDailyCloseSeries
+        System.out.println("[DEBUG] Massive API 查询失败，回退到缓存数据源");
+        return fetchCachedHistoricalPrice(t, date);
+    }
+    
+    /**
+     * 使用 Massive API 查询指定日期的历史价格
+     * URL格式: /v1/open-close/{ticker}/{date}?adjusted=true&apiKey={apiKey}
+     */
+    private Optional<Double> fetchMassiveHistoricalPrice(String ticker, LocalDate date) {
+        String apiKey = appProperties.getPricing().getMassiveApiKey();
+        String base = appProperties.getPricing().getMassiveBase();
+        
+        // URL格式: /v1/open-close/{ticker}/{date}
+        String url = base + "/open-close/" + ticker + "/" + date 
+                + "?adjusted=true&apiKey=" + apiKey;
+        
+        System.out.println("[DEBUG] Massive API URL: " + url);
+        
+        try {
+            String body = restClient.get()
+                    .uri(url)
+                    .header("accept", "application/json")
+                    .retrieve()
+                    .body(String.class);
+            
+            if (body == null || body.isBlank()) {
+                System.out.println("[DEBUG] Massive API 返回空响应");
+                return Optional.empty();
+            }
+            
+            JsonNode root = objectMapper.readTree(body);
+            
+            // 解析 Massive API 响应
+            // 响应格式: {"symbol": "AAPL", "from": "2023-01-09", "open": 130.47, "high": 133.41, "low": 129.95, "close": 130.73, "volume": 70790813, "afterHours": 130.6, "preMarket": 129.98}
+            if (root.has("close")) {
+                double closePrice = root.get("close").asDouble();
+                String fromDate = root.has("from") ? root.get("from").asText() : date.toString();
+                System.out.println("[DEBUG] ✓ 从 Massive API 找到历史价格: " + closePrice + " (" + fromDate + ")");
+                System.out.println("================================================\n");
+                return Optional.of(closePrice);
+            }
+            
+            System.out.println("[DEBUG] Massive API 响应中未找到 close 字段");
+        } catch (Exception e) {
+            System.out.println("[DEBUG] Massive API 请求失败: " + e.getMessage());
+        }
+        
+        return Optional.empty();
+    }
+    
+    /**
+     * 使用缓存数据源查询历史价格（回退方案）
+     */
+    private Optional<Double> fetchCachedHistoricalPrice(String ticker, LocalDate date) {
+        System.out.println("\n========== [历史价格查询 - 缓存数据源] ==========");
+        
+        // 计算需要查询多少天的数据才能覆盖到目标日期
+        int daysBack = (int) java.time.temporal.ChronoUnit.DAYS.between(date, LocalDate.now()) + 5;
+        daysBack = Math.max(daysBack, 30); // 至少查询30天
+        
+        // 使用 cachedDailyCloseSeries 获取历史数据
+        List<TimePrice> series = fetchCachedDailyCloseSeries(ticker, daysBack);
+        
+        // 查找目标日期的价格
+        for (TimePrice tp : series) {
+            LocalDate priceDate = tp.day().atZone(ZoneOffset.UTC).toLocalDate();
+            if (priceDate.equals(date)) {
+                System.out.println("[DEBUG] ✓ 从缓存找到历史价格: " + tp.price() + " (" + date + ")");
+                System.out.println("===============================================\n");
+                return Optional.of(tp.price());
+            }
+        }
+        
+        // 如果没找到精确日期，返回最近一天的价格
+        if (!series.isEmpty()) {
+            TimePrice latest = series.get(series.size() - 1);
+            LocalDate latestDate = latest.day().atZone(ZoneOffset.UTC).toLocalDate();
+            System.out.println("[DEBUG] ⚠ 未找到 " + date + " 的价格，使用最近日期 " + latestDate + " 的价格: " + latest.price());
+            System.out.println("===============================================\n");
+            return Optional.of(latest.price());
+        }
+        
+        System.out.println("[DEBUG] ✗ 未找到历史价格数据");
+        System.out.println("===============================================\n");
+        return Optional.empty();
+    }
+
+    /**
+     * 带货币换算的历史价格查询
+     */
+    public Optional<Double> fetchHistoricalPriceWithCurrency(String ticker, LocalDate date, String targetCurrency) {
+        Optional<Double> priceOpt = fetchHistoricalPrice(ticker, date);
+        if (priceOpt.isEmpty() || targetCurrency == null) {
+            return priceOpt;
+        }
+        
+        double originalPrice = priceOpt.get();
+        String sourceCurrency = detectSourceCurrency(ticker);
+        
+        if (sourceCurrency.equalsIgnoreCase(targetCurrency)) {
+            return Optional.of(originalPrice);
+        }
+        
+        double convertedPrice = convertCurrency(originalPrice, sourceCurrency, targetCurrency);
+        System.out.println("\n========== [历史价格货币换算] ==========");
+        System.out.println("[DEBUG] 原始历史价格: " + originalPrice + " " + sourceCurrency);
+        System.out.println("[DEBUG] 目标货币: " + targetCurrency);
+        System.out.println("[DEBUG] 汇率: " + getExchangeRate(sourceCurrency, targetCurrency));
+        System.out.println("[DEBUG] 换算后: " + convertedPrice + " " + targetCurrency);
+        System.out.println("=======================================\n");
+        
+        return Optional.of(convertedPrice);
+    }
 }

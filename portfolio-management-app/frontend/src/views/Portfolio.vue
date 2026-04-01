@@ -157,6 +157,7 @@
           <select v-model="holdingForm.assetType">
             <option value="stock">股票</option>
             <option value="bond">债券</option>
+            <option value="fund">基金</option>
             <option value="cash">现金</option>
           </select>
         </div>
@@ -173,8 +174,12 @@
           <input v-model.number="holdingForm.quantity" type="number" step="0.01" />
         </div>
         <div class="form-group">
-          <label>平均成本</label>
-          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" />
+          <label>购入日期</label>
+          <input v-model="holdingForm.purchaseDate" type="date" @change="onPurchaseDateChange" />
+        </div>
+        <div class="form-group">
+          <label>平均成本 <small v-if="holdingForm.purchaseDate && !holdingForm.averageCost" style="color: #666;">(将自动填充购入日期收盘价)</small></label>
+          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" placeholder="留空则自动查询购入日期价格" />
         </div>
         <div class="modal-actions">
           <button class="btn-primary" @click="saveHolding">保存</button>
@@ -213,7 +218,8 @@ const holdingForm = ref({
   ticker: '',
   name: '',
   quantity: 0,
-  averageCost: 0
+  averageCost: 0,
+  purchaseDate: null
 });
 
 function fmtMoney(v) {
@@ -226,7 +232,7 @@ function fmtMoney(v) {
 }
 
 function formatAssetType(type) {
-  const map = { 'stock': '股票', 'bond': '债券', 'cash': '现金' };
+  const map = { 'stock': '股票', 'bond': '债券', 'fund': '基金', 'cash': '现金' };
   return map[type] || type;
 }
 
@@ -296,7 +302,8 @@ function editHolding(h) {
     ticker: h.ticker || '',
     name: '',
     quantity: h.quantity,
-    averageCost: h.costBasis / h.quantity
+    averageCost: h.costBasis / h.quantity,
+    purchaseDate: h.purchaseDate || null
   };
   showAddHolding.value = true;
 }
@@ -309,11 +316,38 @@ function closeHoldingModal() {
     ticker: '',
     name: '',
     quantity: 0,
-    averageCost: 0
+    averageCost: 0,
+    purchaseDate: null
   };
 }
 
 async function saveHolding() {
+  // 校验数量必须大于0
+  if (!holdingForm.value.quantity || holdingForm.value.quantity <= 0) {
+    alert('数量必须大于0，请重新输入');
+    return;
+  }
+  
+  // 校验股票代码（非现金类型必须有ticker）
+  if (holdingForm.value.assetType !== 'cash') {
+    if (!holdingForm.value.ticker || holdingForm.value.ticker.trim() === '') {
+      alert('请输入股票代码');
+      return;
+    }
+    
+    // 验证股票代码是否有效（通过查询价格验证）
+    try {
+      const detail = await api.getAssetDetail(holdingForm.value.ticker.toUpperCase(), null);
+      if (!detail || !detail.currentPrice) {
+        alert('股票代码无效或无法获取价格，请重新输入');
+        return;
+      }
+    } catch (e) {
+      alert('股票代码无效或无法获取价格，请重新输入');
+      return;
+    }
+  }
+  
   try {
     const payload = {
       ...holdingForm.value,
@@ -341,6 +375,12 @@ async function onTickerInput() {
     return;
   }
   
+  // 如果有购入日期，优先使用历史价格
+  if (holdingForm.value.purchaseDate) {
+    await fetchHistoricalPriceForDate();
+    return;
+  }
+  
   // 防抖：避免用户每输入一个字母就触发请求
   clearTimeout(tickerDebounceTimer);
   tickerDebounceTimer = setTimeout(async () => {
@@ -350,12 +390,57 @@ async function onTickerInput() {
       if (detail && detail.currentPrice) {
         // 自动填充当前价格作为参考
         holdingForm.value.averageCost = detail.currentPrice;
-        console.log('自动填充价格:', detail.currentPrice);
+        console.log('自动填充当前价格:', detail.currentPrice);
       }
     } catch (e) {
       console.log('获取股票价格失败:', e.message);
     }
   }, 500); // 500ms 防抖
+}
+
+// 当选择购入日期时，查询历史价格
+async function onPurchaseDateChange() {
+  const ticker = holdingForm.value.ticker;
+  const purchaseDate = holdingForm.value.purchaseDate;
+  
+  if (!ticker || !purchaseDate || holdingForm.value.assetType === 'cash') {
+    return;
+  }
+  
+  await fetchHistoricalPriceForDate();
+}
+
+// 查询指定日期的历史价格
+async function fetchHistoricalPriceForDate() {
+  const ticker = holdingForm.value.ticker;
+  const purchaseDate = holdingForm.value.purchaseDate;
+  
+  if (!ticker || !purchaseDate) return;
+  
+  try {
+    // 将日期格式化为 yyyy-MM-dd 字符串（兼容 Date 对象和字符串）
+    let dateStr;
+    if (purchaseDate instanceof Date) {
+      dateStr = purchaseDate.toISOString().split('T')[0];
+    } else if (typeof purchaseDate === 'string') {
+      // 如果已经是字符串格式（如 "2024-01-15"），直接使用
+      dateStr = purchaseDate;
+    } else {
+      console.log('日期格式不正确:', purchaseDate);
+      return;
+    }
+    
+    console.log('查询历史价格:', ticker, dateStr);
+    const result = await api.getHistoricalPrice(ticker.toUpperCase(), dateStr);
+    if (result && result.found && result.price) {
+      holdingForm.value.averageCost = result.price;
+      console.log('自动填充历史价格:', result.price);
+    } else {
+      console.log('未找到历史价格:', result?.message || '未知原因');
+    }
+  } catch (e) {
+    console.log('获取历史价格失败:', e.message);
+  }
 }
 
 async function deleteHolding(id) {

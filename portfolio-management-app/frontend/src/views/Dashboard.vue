@@ -155,6 +155,7 @@ function formatAssetType(type) {
   const map = {
     'stock': '股票',
     'bond': '债券',
+    'fund': '基金',
     'cash': '现金'
   };
   return map[type] || type;
