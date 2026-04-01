@@ -1,21 +1,21 @@
 <template>
   <div class="portfolio-page">
     <header class="page-header">
-      <h1>投资组合</h1>
-      <p class="subtitle">管理您的投资组合和持仓</p>
+      <h1>{{ t('portfolio.title') }}</h1>
+      <p class="subtitle">{{ t('portfolio.subtitle') }}</p>
     </header>
 
     <div class="portfolio-content">
       <!-- 组合列表 -->
       <section class="card">
         <div class="card-header">
-          <h2>我的组合</h2>
+          <h2>{{ t('portfolio.myPortfolios') }}</h2>
           <button class="btn-primary" @click="showCreateModal = true">
-            + 新建组合
+            {{ t('portfolio.newPortfolio') }}
           </button>
         </div>
         
-        <div v-if="loading" class="loading">加载中...</div>
+        <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
         
         <div v-else-if="portfolios.length" class="portfolio-list">
           <div 
@@ -33,7 +33,7 @@
           </div>
         </div>
         
-        <p v-else class="empty">暂无组合，点击上方按钮创建</p>
+        <p v-else class="empty">{{ t('portfolio.noPortfolios') }}</p>
       </section>
 
       <!-- 组合详情 -->
@@ -41,8 +41,8 @@
         <div class="card-header">
           <h2>{{ selectedPortfolio.name }}</h2>
           <div class="header-actions">
-            <button class="btn-secondary" @click="refreshData">刷新</button>
-            <button class="btn-primary" @click="showAddHolding = true">+ 添加持仓</button>
+            <button class="btn-secondary" @click="refreshData">{{ t('portfolio.refresh') }}</button>
+            <button class="btn-primary" @click="showAddHolding = true">{{ t('portfolio.addHolding') }}</button>
           </div>
         </div>
 
@@ -50,22 +50,22 @@
         <div v-if="summary" class="summary-section">
           <div class="summary-grid">
             <div class="summary-item">
-              <span class="label">总成本</span>
+              <span class="label">{{ t('portfolio.totalCost') }}</span>
               <span class="value">{{ fmtMoney(summary.totalCost) }}</span>
             </div>
             <div class="summary-item">
-              <span class="label">总市值</span>
+              <span class="label">{{ t('portfolio.totalMarketValue') }}</span>
               <span class="value">{{ fmtMoney(summary.totalMarketValue) }}</span>
             </div>
             <div class="summary-item" :class="{ 'positive': summary.unrealizedPnl >= 0, 'negative': summary.unrealizedPnl < 0 }">
-              <span class="label">未实现盈亏</span>
+              <span class="label">{{ t('portfolio.unrealizedPnl') }}</span>
               <span class="value">{{ fmtMoney(summary.unrealizedPnl) }}</span>
             </div>
           </div>
 
           <!-- 资产分布 -->
           <div class="allocation-section">
-            <h3>资产分布</h3>
+            <h3>{{ t('portfolio.assetAllocation') }}</h3>
             <div class="allocation-bars">
               <div v-for="(pct, type) in summary.allocationPct" :key="type" class="alloc-item">
                 <span class="type">{{ formatAssetType(type) }}</span>
@@ -80,18 +80,18 @@
 
         <!-- 持仓列表 -->
         <div class="holdings-section">
-          <h3>持仓明细</h3>
+          <h3>{{ t('portfolio.holdingsDetail') }}</h3>
           <table v-if="summary?.holdings?.length" class="data-table">
             <thead>
               <tr>
-                <th>类型</th>
-                <th>标的</th>
-                <th>数量</th>
-                <th>成本价</th>
-                <th>市价</th>
-                <th>市值</th>
-                <th>盈亏</th>
-                <th>操作</th>
+                <th>{{ t('portfolio.assetType') }}</th>
+                <th>{{ t('portfolio.ticker') }}</th>
+                <th>{{ t('portfolio.quantity') }}</th>
+                <th>{{ t('portfolio.costPrice') }}</th>
+                <th>{{ t('portfolio.marketPrice') }}</th>
+                <th>{{ t('portfolio.marketValue') }}</th>
+                <th>{{ t('portfolio.profitLoss') }}</th>
+                <th>{{ t('portfolio.action') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -106,35 +106,35 @@
                   {{ h.unrealizedPnl != null ? fmtMoney(h.unrealizedPnl) : '—' }}
                 </td>
                 <td>
-                  <button class="btn-small" @click="editHolding(h)">编辑</button>
-                  <button class="btn-small btn-danger" @click="deleteHolding(h.holdingId)">删除</button>
+                  <button class="btn-small" @click="editHolding(h)">{{ t('common.edit') }}</button>
+                  <button class="btn-small btn-danger" @click="deleteHolding(h.holdingId)">{{ t('common.delete') }}</button>
                 </td>
               </tr>
             </tbody>
           </table>
-          <p v-else class="empty">暂无持仓</p>
+          <p v-else class="empty">{{ t('portfolio.noHoldings') }}</p>
         </div>
       </section>
 
       <section v-else class="card empty-card">
-        <p>请选择一个组合查看详情</p>
+        <p>{{ t('portfolio.selectPortfolio') }}</p>
       </section>
     </div>
 
     <!-- 新建组合弹窗 -->
     <div v-if="showCreateModal" class="modal-backdrop" @click.self="showCreateModal = false">
       <div class="modal">
-        <h3>新建组合</h3>
+        <h3>{{ t('portfolio.createNew') }}</h3>
         <div class="form-group">
-          <label>名称</label>
-          <input v-model="newPortfolio.name" placeholder="组合名称" />
+          <label>{{ t('portfolio.name') }}</label>
+          <input v-model="newPortfolio.name" :placeholder="t('portfolio.placeholder.portfolioName')" />
         </div>
         <div class="form-group">
-          <label>描述</label>
-          <input v-model="newPortfolio.description" placeholder="描述（可选）" />
+          <label>{{ t('portfolio.description') }}</label>
+          <input v-model="newPortfolio.description" :placeholder="t('portfolio.placeholder.description')" />
         </div>
         <div class="form-group">
-          <label>本币</label>
+          <label>{{ t('portfolio.baseCurrency') }}</label>
           <select v-model="newPortfolio.baseCurrency">
             <option value="USD">USD</option>
             <option value="CNY">CNY</option>
@@ -142,8 +142,8 @@
           </select>
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" @click="createPortfolio">创建</button>
-          <button class="btn-secondary" @click="showCreateModal = false">取消</button>
+          <button class="btn-primary" @click="createPortfolio">{{ t('common.create') }}</button>
+          <button class="btn-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
         </div>
       </div>
     </div>
@@ -151,39 +151,39 @@
     <!-- 添加/编辑持仓弹窗 -->
     <div v-if="showAddHolding" class="modal-backdrop" @click.self="closeHoldingModal">
       <div class="modal">
-        <h3>{{ editingHolding ? '编辑持仓' : '添加持仓' }}</h3>
+        <h3>{{ editingHolding ? t('portfolio.editHoldingTitle') : t('portfolio.addHoldingTitle') }}</h3>
         <div class="form-group">
-          <label>资产类型</label>
+          <label>{{ t('portfolio.assetType') }}</label>
           <select v-model="holdingForm.assetType">
-            <option value="stock">股票</option>
-            <option value="bond">债券</option>
-            <option value="fund">基金</option>
-            <option value="cash">现金</option>
+            <option value="stock">{{ t('assetType.stock') }}</option>
+            <option value="bond">{{ t('assetType.bond') }}</option>
+            <option value="fund">{{ t('assetType.fund') }}</option>
+            <option value="cash">{{ t('assetType.cash') }}</option>
           </select>
         </div>
         <div class="form-group" v-if="holdingForm.assetType !== 'cash'">
-          <label>股票代码</label>
-          <input v-model="holdingForm.ticker" @change="onTickerInput" placeholder="eg:AAPL" />
+          <label>{{ t('portfolio.ticker') }}</label>
+          <input v-model="holdingForm.ticker" @change="onTickerInput" :placeholder="t('portfolio.placeholder.ticker')" />
         </div>
         <div class="form-group">
-          <label>名称（可选）</label>
-          <input v-model="holdingForm.name" placeholder="名称" />
+          <label>{{ t('portfolio.name') }} ({{ t('common.optional') }})</label>
+          <input v-model="holdingForm.name" :placeholder="t('portfolio.placeholder.name')" />
         </div>
         <div class="form-group">
-          <label>数量</label>
+          <label>{{ t('portfolio.quantity') }}</label>
           <input v-model.number="holdingForm.quantity" type="number" step="0.01" />
         </div>
         <div class="form-group">
-          <label>购入日期</label>
+          <label>{{ t('portfolio.purchaseDate') }}</label>
           <input v-model="holdingForm.purchaseDate" type="date" @change="onPurchaseDateChange" />
         </div>
         <div class="form-group">
-          <label>平均成本 <small v-if="holdingForm.purchaseDate && !holdingForm.averageCost" style="color: #666;">(将自动填充购入日期收盘价)</small></label>
-          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" placeholder="留空则自动查询购入日期价格" />
+          <label>{{ t('portfolio.averageCost') }} <small v-if="holdingForm.purchaseDate && !holdingForm.averageCost" style="color: #666;">({{ t('portfolio.autoFill') }})</small></label>
+          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" :placeholder="t('portfolio.autoFill')" />
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" @click="saveHolding">保存</button>
-          <button class="btn-secondary" @click="closeHoldingModal">取消</button>
+          <button class="btn-primary" @click="saveHolding">{{ t('common.save') }}</button>
+          <button class="btn-secondary" @click="closeHoldingModal">{{ t('common.cancel') }}</button>
         </div>
       </div>
     </div>
@@ -194,8 +194,10 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '../api';
+import { useI18n } from '../composables/useI18n';
 
 const route = useRoute();
+const { lang, t } = useI18n();
 
 const loading = ref(false);
 const portfolios = ref([]);

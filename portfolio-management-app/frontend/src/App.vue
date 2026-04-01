@@ -2,16 +2,19 @@
   <div class="app">
     <header class="header">
       <div class="header-row">
-        <h1>投资组合管理</h1>
+        <h1>{{ t('common.title') }}</h1>
         <nav class="nav">
-          <router-link to="/dashboard" class="nav-link" active-class="active">仪表盘</router-link>
-          <router-link to="/portfolio" class="nav-link" active-class="active">投资组合</router-link>
-          <router-link to="/market" class="nav-link" active-class="active">市场行情</router-link>
-          <router-link to="/analytics" class="nav-link" active-class="active">投资分析</router-link>
+          <router-link to="/dashboard" class="nav-link" active-class="active">{{ t('nav.dashboard') }}</router-link>
+          <router-link to="/portfolio" class="nav-link" active-class="active">{{ t('nav.portfolio') }}</router-link>
+          <router-link to="/market" class="nav-link" active-class="active">{{ t('nav.market') }}</router-link>
+          <router-link to="/analytics" class="nav-link" active-class="active">{{ t('nav.analytics') }}</router-link>
         </nav>
+        <div class="header-actions">
+          <LangSwitcher />
+        </div>
       </div>
       <p class="sub">
-        前端调用 Java API（经由 Vite 代理到 <code>8080</code>）
+        {{ t('common.subtitle') }}
       </p>
     </header>
 
@@ -20,6 +23,11 @@
     </main>
   </div>
 </template>
+
+<script setup>
+import LangSwitcher from './components/LangSwitcher.vue';
+import { t } from './locales';
+</script>
 
 <style>
 * {
@@ -51,6 +59,13 @@ body {
   justify-content: space-between;
   max-width: 1400px;
   margin: 0 auto;
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .header h1 {
@@ -62,6 +77,8 @@ body {
 .nav {
   display: flex;
   gap: 0.5rem;
+  flex: 1;
+  justify-content: center;
 }
 
 .nav-link {

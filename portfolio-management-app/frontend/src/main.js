@@ -2,4 +2,10 @@ import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
 
-createApp(App).use(router).mount("#app");
+// 初始化语言设置
+import { initLang } from './locales';
+initLang();
+
+const app = createApp(App);
+app.use(router);
+app.mount("#app");

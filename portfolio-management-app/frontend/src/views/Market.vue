@@ -1,15 +1,15 @@
 <template>
   <div class="market">
     <header class="page-header">
-      <h1>市场行情</h1>
-      <p class="subtitle">实时股票行情与持仓监控</p>
+      <h1>{{ t('market.title') }}</h1>
+      <p class="subtitle">{{ t('market.subtitle') }}</p>
     </header>
 
     <!-- 组合选择器 -->
     <div class="portfolio-selector">
-      <label>选择组合：</label>
+      <label>{{ t('market.selectPortfolio') }}：</label>
       <select v-model="selectedPortfolioId" @change="onPortfolioChange">
-        <option value="">全部持仓</option>
+        <option value="">{{ t('market.allHoldings') }}</option>
         <option v-for="p in portfolios" :key="p.id" :value="p.id">
           {{ p.name }}
         </option>
@@ -19,13 +19,13 @@
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <!-- 错误提示 -->
     <div v-else-if="error" class="error-message">
       {{ error }}
-      <button @click="loadData" class="retry-btn">重试</button>
+      <button @click="loadData" class="retry-btn">{{ t('common.retry') }}</button>
     </div>
 
     <!-- 数据展示 -->
@@ -33,8 +33,8 @@
       <!-- 我的持仓行情 -->
       <section class="card">
         <div class="card-header">
-          <h2>我的持仓</h2>
-          <span class="update-time">{{ updateTime }}</span>
+          <h2>{{ t('market.myHoldings') }}</h2>
+          <span class="update-time">{{ t('market.updateTime') }}：{{ updateTime }}</span>
         </div>
         <div v-if="holdingsData?.length" class="stock-grid">
           <div 
@@ -55,18 +55,18 @@
               </span>
             </div>
             <div class="stock-holding">
-              <span class="quantity">持仓: {{ stock.holdingQuantity }}</span>
-              <span class="value">市值: {{ fmtMoney(stock.holdingValue) }}</span>
+              <span class="quantity">{{ t('market.holding') }}: {{ stock.holdingQuantity }}</span>
+              <span class="value">{{ t('market.position') }}: {{ fmtMoney(stock.holdingValue) }}</span>
             </div>
           </div>
         </div>
-        <p v-else class="empty">暂无持仓数据</p>
+        <p v-else class="empty">{{ t('market.noHoldingsData') }}</p>
       </section>
 
       <!-- 涨跌排行 -->
       <div class="movers-grid">
         <section class="card">
-          <h2>📈 涨幅榜</h2>
+          <h2>{{ t('market.gainers') }}</h2>
           <div v-if="gainers?.length" class="mover-list">
             <div v-for="(item, idx) in gainers" :key="item.ticker" class="mover-item">
               <span class="rank">{{ idx + 1 }}</span>
@@ -79,7 +79,7 @@
         </section>
 
         <section class="card">
-          <h2>📉 跌幅榜</h2>
+          <h2>{{ t('market.losers') }}</h2>
           <div v-if="losers?.length" class="mover-list">
             <div v-for="(item, idx) in losers" :key="item.ticker" class="mover-item">
               <span class="rank">{{ idx + 1 }}</span>
@@ -94,15 +94,15 @@
 
       <!-- 热门股票 -->
       <section class="card">
-        <h2>🔥 热门股票</h2>
+        <h2>{{ t('market.popularStocks') }}</h2>
         <div v-if="popularStocks?.length" class="stock-table">
           <table>
             <thead>
               <tr>
-                <th>代码</th>
-                <th>名称</th>
-                <th>价格</th>
-                <th>数据来源</th>
+                <th>{{ t('market.ticker') }}</th>
+                <th>{{ t('market.name') }}</th>
+                <th>{{ t('market.price') }}</th>
+                <th>{{ t('market.source') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -120,20 +120,20 @@
 
       <!-- 搜索股票 -->
       <section class="card">
-        <h2>🔍 股票搜索</h2>
+        <h2>{{ t('market.searchStock') }}</h2>
         <div class="search-box">
           <input 
             v-model="searchTicker" 
-            placeholder="输入股票代码 (如: AAPL)"
+            :placeholder="t('market.searchPlaceholder')"
             @keyup.enter="search"
           />
-          <button @click="search" :disabled="searching">搜索</button>
+          <button @click="search" :disabled="searching">{{ searching ? t('market.searching') : t('common.search') }}</button>
         </div>
         <div v-if="searchResult" class="search-result">
           <div class="result-item" :class="{ 'available': searchResult.isAvailable }">
             <span class="ticker">{{ searchResult.ticker }}</span>
             <span class="price">{{ fmtMoney(searchResult.currentPrice) }}</span>
-            <span class="status">{{ searchResult.isAvailable ? '✓ 可交易' : '✗ 暂不可用' }}</span>
+            <span class="status">{{ searchResult.isAvailable ? t('market.available') : t('market.unavailable') }}</span>
           </div>
         </div>
       </section>
@@ -191,6 +191,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { api } from '../api';
+import { useI18n } from '../composables/useI18n';
+
+const { lang, t } = useI18n();
 
 const loading = ref(false);
 const error = ref('');

@@ -1,20 +1,20 @@
 <template>
   <div class="dashboard">
     <header class="page-header">
-      <h1>仪表盘</h1>
-      <p class="subtitle">投资组合总览</p>
+      <h1>{{ t('dashboard.title') }}</h1>
+      <p class="subtitle">{{ t('dashboard.subtitle') }}</p>
     </header>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <!-- 错误提示 -->
     <div v-else-if="error" class="error-message">
       {{ error }}
-      <button @click="loadData" class="retry-btn">重试</button>
+      <button @click="loadData" class="retry-btn">{{ t('common.retry') }}</button>
     </div>
 
     <!-- 数据展示 -->
@@ -24,21 +24,21 @@
         <div class="kpi-card">
           <div class="kpi-icon">💰</div>
           <div class="kpi-info">
-            <div class="kpi-label">总资产</div>
+            <div class="kpi-label">{{ t('dashboard.totalValue') }}</div>
             <div class="kpi-value">{{ fmtMoney(summary?.totalPortfolioValue) }}</div>
           </div>
         </div>
         <div class="kpi-card">
           <div class="kpi-icon">📈</div>
           <div class="kpi-info">
-            <div class="kpi-label">总成本</div>
+            <div class="kpi-label">{{ t('dashboard.totalCost') }}</div>
             <div class="kpi-value">{{ fmtMoney(summary?.totalCost) }}</div>
           </div>
         </div>
         <div class="kpi-card" :class="{ 'positive': summary?.totalUnrealizedPnl >= 0, 'negative': summary?.totalUnrealizedPnl < 0 }">
           <div class="kpi-icon">{{ summary?.totalUnrealizedPnl >= 0 ? '📊' : '📉' }}</div>
           <div class="kpi-info">
-            <div class="kpi-label">未实现盈亏</div>
+            <div class="kpi-label">{{ t('dashboard.unrealizedPnl') }}</div>
             <div class="kpi-value">
               {{ fmtMoney(summary?.totalUnrealizedPnl) }}
               <span class="percent">({{ fmtPercent(summary?.totalUnrealizedPnlPercent) }})</span>
@@ -48,7 +48,7 @@
         <div class="kpi-card">
           <div class="kpi-icon">🎯</div>
           <div class="kpi-info">
-            <div class="kpi-label">组合数量</div>
+            <div class="kpi-label">{{ t('dashboard.portfolioCount') }}</div>
             <div class="kpi-value">{{ summary?.portfolioCount || 0 }}</div>
           </div>
         </div>
@@ -56,7 +56,7 @@
 
       <!-- 资产分布 -->
       <section class="card">
-        <h2>资产分布</h2>
+        <h2>{{ t('dashboard.assetDistribution') }}</h2>
         <div v-if="assetDistribution?.length" class="distribution">
           <div v-for="item in assetDistribution" :key="item.assetType" class="dist-item">
             <div class="dist-label">{{ formatAssetType(item.assetType) }}</div>
@@ -69,12 +69,12 @@
             </div>
           </div>
         </div>
-        <p v-else class="empty">暂无资产分布数据</p>
+        <p v-else class="empty">{{ t('dashboard.noAssetDistribution') }}</p>
       </section>
 
       <!-- 组合列表 -->
       <section class="card">
-        <h2>我的组合</h2>
+        <h2>{{ t('dashboard.myPortfolios') }}</h2>
         <div v-if="portfolios?.length" class="portfolio-list">
           <div 
             v-for="p in portfolios" 
@@ -88,26 +88,26 @@
             </div>
             <div class="portfolio-stats">
               <div class="stat">
-                <span class="stat-label">市值</span>
+                <span class="stat-label">{{ t('dashboard.marketValue') }}</span>
                 <span class="stat-value">{{ fmtMoney(p.totalValue) }}</span>
               </div>
               <div class="stat" :class="{ 'positive': p.unrealizedPnl >= 0, 'negative': p.unrealizedPnl < 0 }">
-                <span class="stat-label">盈亏</span>
+                <span class="stat-label">{{ t('dashboard.profitLoss') }}</span>
                 <span class="stat-value">{{ fmtMoney(p.unrealizedPnl) }}</span>
               </div>
               <div class="stat">
-                <span class="stat-label">持仓</span>
-                <span class="stat-value">{{ p.holdingCount }}个</span>
+                <span class="stat-label">{{ t('dashboard.holdings') }}</span>
+                <span class="stat-value">{{ p.holdingCount }}{{ lang === 'zh' ? '个' : '' }}</span>
               </div>
             </div>
           </div>
         </div>
-        <p v-else class="empty">暂无组合，请先创建</p>
+        <p v-else class="empty">{{ t('dashboard.noPortfolios') }}</p>
       </section>
 
       <!-- 市场概览 -->
       <section class="card">
-        <h2>市场概览</h2>
+        <h2>{{ t('dashboard.marketOverview') }}</h2>
         <div v-if="marketOverview?.length" class="market-indexes">
           <div v-for="idx in marketOverview" :key="idx.indexName" class="index-item">
             <span class="index-name">{{ idx.indexName }}</span>
@@ -117,7 +117,7 @@
             </span>
           </div>
         </div>
-        <p v-else class="empty">暂无市场数据</p>
+        <p v-else class="empty">{{ t('dashboard.noMarketData') }}</p>
       </section>
     </div>
   </div>
@@ -127,8 +127,10 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
+import { useI18n } from '../composables/useI18n';
 
 const router = useRouter();
+const { lang, t } = useI18n();
 
 const loading = ref(false);
 const error = ref('');
@@ -152,13 +154,13 @@ function fmtPercent(v) {
 }
 
 function formatAssetType(type) {
-  const map = {
-    'stock': '股票',
-    'bond': '债券',
-    'fund': '基金',
-    'cash': '现金'
+  const keyMap = {
+    'stock': 'assetType.stock',
+    'bond': 'assetType.bond',
+    'fund': 'assetType.fund',
+    'cash': 'assetType.cash'
   };
-  return map[type] || type;
+  return t(keyMap[type]) || type;
 }
 
 async function loadData() {
@@ -176,7 +178,7 @@ async function loadData() {
     assetDistribution.value = distributionRes;
     marketOverview.value = marketRes;
   } catch (e) {
-    error.value = e.message || '加载失败';
+    error.value = e.message || t('common.error');
   } finally {
     loading.value = false;
   }

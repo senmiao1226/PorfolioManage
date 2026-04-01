@@ -1,8 +1,8 @@
 <template>
   <div class="analytics">
     <header class="page-header">
-      <h1>投资分析</h1>
-      <p class="subtitle">深度分析投资组合表现</p>
+      <h1>{{ t('analytics.title') }}</h1>
+      <p class="subtitle">{{ t('analytics.subtitle') }}</p>
     </header>
 
     <!-- 组合选择器 -->
@@ -191,6 +191,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { api } from '../api';
+import { useI18n } from '../composables/useI18n';
+
+const { lang, t } = useI18n();
 
 const loading = ref(false);
 const error = ref('');
