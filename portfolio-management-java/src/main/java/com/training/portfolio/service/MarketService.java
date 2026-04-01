@@ -44,20 +44,29 @@ public class MarketService {
      * @return 带持仓信息的市场价格列表
      */
     public List<MarketPriceWithHoldingDto> getHoldingsMarketData(Long portfolioId) {
+        System.out.println("\n[MarketService.getHoldingsMarketData] 开始 | portfolioId=" + portfolioId);
+        
         // 1. 查询该组合的所有持仓
         List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
+        System.out.println("[DEBUG] 从数据库获取持仓记录数：" + holdings.size());
 
         // 2. 按股票代码分组聚合（同一股票可能有多条记录）
         Map<String, List<Holding>> holdingsByTicker = holdings.stream()
                 .filter(h -> h.getAssetType() != AssetType.cash)
                 .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
                 .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
+        
+        System.out.println("[DEBUG] 去重后的股票数量：" + holdingsByTicker.size());
+        System.out.println("[DEBUG] 股票列表：" + holdingsByTicker.keySet());
 
         // 3. 为每只股票构建市场数据
-        return holdingsByTicker.entrySet().stream()
+        List<MarketPriceWithHoldingDto> result = holdingsByTicker.entrySet().stream()
                 .map(entry -> buildMarketDataWithHolding(entry.getKey(), entry.getValue()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+        
+        System.out.println("[MarketService.getHoldingsMarketData] 完成 | 返回记录数=" + result.size());
+        return result;
     }
 
     /**
@@ -135,30 +144,35 @@ public class MarketService {
      * @return 个股详情
      */
     public MarketDetailDto getAssetDetail(String ticker, Long portfolioId) {
+        System.out.println("\n[MarketService.getAssetDetail] 开始 | ticker=" + ticker + ", portfolioId=" + portfolioId);
+        
         if (ticker == null || ticker.isBlank()) {
+            System.out.println("[DEBUG] ticker为空，返回null");
             return null;
         }
 
         String normalizedTicker = ticker.trim().toUpperCase();
 
-        // 获取当前价格
+        // 获取当前价格和前收盘价（复用PricingService的缓存）
+        System.out.println("[DEBUG] 调用PricingService获取价格...");
         Optional<Double> priceOpt = pricingService.priceForHolding(AssetType.stock, normalizedTicker);
+        Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, normalizedTicker);
+        
         if (priceOpt.isEmpty()) {
+            System.out.println("[DEBUG] 未获取到价格，返回null");
             return null;
         }
 
         Double currentPrice = priceOpt.get();
-
-        // 使用当前价格作为前收盘价（简化处理）
-        Double previousClose = currentPrice;
+        Double previousClose = prevCloseOpt.orElse(currentPrice);
 
         Double priceChange = currentPrice - previousClose;
         Double priceChangePercent = previousClose != 0
                 ? (priceChange / previousClose) * 100
                 : 0.0;
 
-        // 构建空价格历史（简化处理）
-        List<PricePointDto> priceHistory = List.of();
+        // 获取价格历史（复用已有方法）
+        List<PricePointDto> priceHistory = fetchPriceHistory(normalizedTicker, 30);
 
         // 查询持仓信息
         Double holdingQuantity = null;
@@ -239,6 +253,8 @@ public class MarketService {
     // ========== 私有辅助方法 ==========
 
     private MarketPriceWithHoldingDto buildMarketDataWithHolding(String ticker, List<Holding> holdings) {
+        System.out.println("[MarketService.buildMarketDataWithHolding] 处理 | ticker=" + ticker + ", 持仓记录数=" + holdings.size());
+        
         if (holdings.isEmpty()) {
             return null;
         }
@@ -255,10 +271,14 @@ public class MarketService {
                 .findFirst()
                 .orElse(ticker);
 
-        // 查询当前价格
+        // 查询当前价格和前收盘价（复用PricingService缓存）
+        System.out.println("[DEBUG] 调用PricingService.priceForHolding获取价格...");
         Optional<Double> priceOpt = pricingService.priceForHolding(AssetType.stock, ticker);
+        System.out.println("[DEBUG] 调用PricingService.fetchPreviousClose获取前收盘价...");
+        Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, ticker);
 
         if (priceOpt.isEmpty()) {
+            System.out.println("[DEBUG] 未获取到价格，返回无价格持仓信息");
             // 价格获取失败，仍返回持仓信息
             return new MarketPriceWithHoldingDto(
                     ticker,
@@ -276,9 +296,17 @@ public class MarketService {
         Double currentPrice = priceOpt.get();
         Double marketValue = currentPrice * totalQuantity;
 
-        // 计算涨跌（简化处理，无历史价格）
+        // 计算涨跌（复用前收盘价）
         Double priceChange = 0.0;
         Double priceChangePercent = 0.0;
+        if (prevCloseOpt.isPresent() && prevCloseOpt.get() > 0) {
+            Double previousClose = prevCloseOpt.get();
+            priceChange = currentPrice - previousClose;
+            priceChangePercent = (priceChange / previousClose) * 100;
+            System.out.println("[DEBUG] 计算涨跌幅 | 当前价=" + currentPrice + ", 前收=" + previousClose + ", 涨跌=" + round2(priceChangePercent) + "%");
+        } else {
+            System.out.println("[DEBUG] 未获取到前收盘价，涨跌幅设为0");
+        }
 
         return new MarketPriceWithHoldingDto(
                 ticker,
@@ -308,5 +336,29 @@ public class MarketService {
     private static double round2(Double v) {
         if (v == null) return 0.0;
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    /**
+     * 获取股票前收盘价（供Controller复用）
+     */
+    public Optional<Double> getPreviousClose(String ticker) {
+        return pricingService.fetchPreviousClose(AssetType.stock, ticker);
+    }
+
+    /**
+     * 获取股票价格历史（复用PricingService的缓存数据）
+     */
+    private List<PricePointDto> fetchPriceHistory(String ticker, int days) {
+        try {
+            List<PricingService.TimePrice> series = pricingService.fetchCachedDailyCloseSeries(ticker, days);
+            return series.stream()
+                    .map(tp -> new PricePointDto(
+                            tp.day().toString(),
+                            tp.price()
+                    ))
+                    .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

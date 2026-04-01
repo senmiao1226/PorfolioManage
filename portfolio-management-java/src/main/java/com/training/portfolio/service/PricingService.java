@@ -120,11 +120,31 @@ public class PricingService {
         return Optional.empty();
     }
 
+    /**
+     * 获取调用来源信息（用于日志追踪）
+     */
+    private String getCallerInfo() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        // 跳过当前方法和Thread.getStackTrace
+        for (int i = 3; i < stack.length && i < 8; i++) {
+            String className = stack[i].getClassName();
+            if (!className.contains("PricingService") && !className.contains("java.lang")) {
+                String simpleName = className.substring(className.lastIndexOf('.') + 1);
+                return simpleName + "." + stack[i].getMethodName() + "()";
+            }
+        }
+        return "unknown";
+    }
+
     public Optional<Double> priceForHolding(AssetType assetType, String ticker) {
+        String caller = getCallerInfo();
+        
         if (assetType == AssetType.cash) {
+            System.out.println("[PricingService.priceForHolding] ← 被 [" + caller + "] 调用 | 类型=cash, 直接返回1.0");
             return Optional.of(1.0);
         }
         if (ticker == null || ticker.isBlank()) {
+            System.out.println("[PricingService.priceForHolding] ← 被 [" + caller + "] 调用 | ticker为空");
             return Optional.empty();
         }
         
@@ -133,23 +153,21 @@ public class PricingService {
         // 【优先检查内存缓存】如果 5 分钟内查询过，直接返回，不再请求任何 API
         CacheEntry<Double> cached = priceCache.get("cached:" + t);
         if (cached != null && isFresh(cached.createdAtMs, PRICE_CACHE_TTL_MS)) {
-            System.out.println("\n========== [价格查询 - 使用内存缓存] ==========");
+            System.out.println("\n========== [PricingService.priceForHolding] ← 被 [" + caller + "] 调用 ==========");
             System.out.println("[DEBUG] 股票：" + t);
-            System.out.println("[DEBUG] ✓ 从内存缓存中获取价格（5 分钟内已查询过）");
-            System.out.println("[DEBUG] 价格：" + cached.value);
-            System.out.println("[DEBUG] 不再发送任何 API 请求");
-            System.out.println("============================================\n");
+            System.out.println("[DEBUG] ✓ 命中内存缓存（5分钟内），价格=" + cached.value);
+            System.out.println("[DEBUG] 跳过所有API请求");
+            System.out.println("=================================================================\n");
             return Optional.ofNullable(cached.value);
         }
         
         String[] providers = appProperties.getPricing().getProviders().split(",");
         
-        System.out.println("\n========== [价格查询开始] ==========");
-        System.out.println("[DEBUG] 查询股票：" + t);
-        System.out.println("[DEBUG] 使用前一天收盘价（非实时价格）");
+        System.out.println("\n========== [PricingService.priceForHolding] ← 被 [" + caller + "] 调用 ==========");
+        System.out.println("[DEBUG] 股票：" + t);
+        System.out.println("[DEBUG] 缓存未命中，开始查询API");
         System.out.println("[DEBUG] 数据源优先级：" + String.join(" > ", providers));
-        System.out.println("[DEBUG] 内存缓存：未命中，需要查询 API");
-        System.out.println("============================================\n");
+        System.out.println("=================================================================\n");
         
         // 按优先级尝试各个数据源
         for (String provider : providers) {
@@ -164,12 +182,9 @@ public class PricingService {
             };
             
             if (price.isPresent()) {
-                System.out.println("\n========== [价格查询成功] ==========");
-                System.out.println("[DEBUG] ✓ 数据源 [" + provider.trim() + "] 成功获取到前一天收盘价");
-                System.out.println("[DEBUG] 价格：" + price.get());
-                System.out.println("[DEBUG] 已将价格存入内存缓存（有效期 5 分钟）");
-                System.out.println("[DEBUG] 不再请求其他数据源");
-                System.out.println("============================================\n");
+                System.out.println("\n[DEBUG] ✓ 数据源 [" + provider.trim() + "] 成功获取价格=" + price.get());
+                System.out.println("[DEBUG] 存入缓存，有效期5分钟");
+                System.out.println("========== [PricingService.priceForHolding] 完成 ==========\n");
                 // 将获取到的价格存入内存缓存
                 priceCache.put("cached:" + t, new CacheEntry<>(price.get(), System.currentTimeMillis()));
                 return price;
@@ -178,11 +193,21 @@ public class PricingService {
             }
         }
         
-        System.out.println("\n========== [价格查询失败] ==========");
-        System.out.println("[DEBUG] ✗ 所有数据源都未能获取到价格");
-        System.out.println("============================================\n");
+        System.out.println("\n[DEBUG] ✗ 所有数据源都未能获取到价格");
+        System.out.println("========== [PricingService.priceForHolding] 失败 ==========\n");
         
         return Optional.empty();
+    }
+
+    /**
+     * 获取前收盘价（用于计算涨跌幅）
+     * 当前价格就是前收盘价，直接复用 priceForHolding 的缓存结果
+     */
+    public Optional<Double> fetchPreviousClose(AssetType assetType, String ticker) {
+        String caller = getCallerInfo();
+        System.out.println("[PricingService.fetchPreviousClose] ← 被 [" + caller + "] 调用 | ticker=" + ticker);
+        // 当前价格本身就是前收盘价，直接返回（会复用 priceForHolding 的缓存）
+        return priceForHolding(assetType, ticker);
     }
 
     /** 获取 Massive.com 实时价格 */

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -208,18 +209,35 @@ public class DashboardController {
      */
     @GetMapping("/market-overview")
     public ResponseEntity<List<DashboardDtos.MarketOverviewDto>> getMarketOverview() {
+        System.out.println("\n[DashboardController.getMarketOverview] 开始 | 获取指数行情...");
+        
         List<MarketDtos.MarketPriceDto> indexes = marketService.getMarketIndexes();
+        System.out.println("[DEBUG] 获取到指数数量：" + indexes.size());
 
         List<DashboardDtos.MarketOverviewDto> overview = indexes.stream()
-                .map(idx -> new DashboardDtos.MarketOverviewDto(
-                        idx.ticker(),
-                        idx.currentPrice(),
-                        0.0, // change - 需要额外计算
-                        0.0, // changePercent
-                        "FLAT"
-                ))
+                .map(idx -> {
+                    // 获取前收盘价计算涨跌
+                    System.out.println("[DEBUG] 计算 " + idx.ticker() + " 的涨跌幅...");
+                    Optional<Double> prevCloseOpt = marketService.getPreviousClose(idx.ticker());
+                    double currentPrice = idx.currentPrice() != null ? idx.currentPrice() : 0.0;
+                    double previousClose = prevCloseOpt.orElse(currentPrice);
+                    double change = currentPrice - previousClose;
+                    double changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0.0;
+                    String trend = change > 0 ? "UP" : (change < 0 ? "DOWN" : "FLAT");
+                    
+                    System.out.println("[DEBUG] " + idx.ticker() + " | 当前=" + currentPrice + ", 前收=" + previousClose + ", 涨跌=" + round2(changePercent) + "%");
+                    
+                    return new DashboardDtos.MarketOverviewDto(
+                            idx.ticker(),
+                            currentPrice,
+                            round2(change),
+                            round2(changePercent),
+                            trend
+                    );
+                })
                 .collect(Collectors.toList());
 
+        System.out.println("[DashboardController.getMarketOverview] 完成 | 返回记录数=" + overview.size());
         return ResponseEntity.ok(overview);
     }
 
