@@ -17,6 +17,7 @@ public final class PortfolioDtos {
 
     public record PortfolioResponse(Long id, String name, String description, String baseCurrency, Instant createdAt) {}
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record HoldingResponse(
             Long id,
             Long portfolioId,
@@ -25,6 +26,7 @@ public final class PortfolioDtos {
             String name,
             Double quantity,
             Double averageCost,
+            Double marketPrice,
             String notes) {}
 
     public record PortfolioDetailResponse(

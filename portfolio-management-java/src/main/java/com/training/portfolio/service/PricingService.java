@@ -30,7 +30,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class PricingService {
 
-    private static final DateTimeFormatter YAHOO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
+
     private static final DateTimeFormatter CACHED_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -53,7 +53,6 @@ public class PricingService {
     }
 
     private final ConcurrentHashMap<String, CacheEntry<Double>> priceCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, CacheEntry<List<TimePrice>>> yahooSeriesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CacheEntry<List<TimePrice>>> cachedDailySeriesCache = new ConcurrentHashMap<>();
 
     private static boolean isFresh(long createdAtMs, long ttlMs) {
@@ -146,7 +145,6 @@ public class PricingService {
                 case "massive" -> fetchMassivePreviousClose(t);
                 case "alpha-vantage" -> fetchAlphaVantagePreviousClose(t);
                 case "sina" -> fetchSinaPreviousClose(t);
-                case "yahoo" -> yahooLastClose(t);
                 case "cached" -> fetchCachedPrice(t);
                 default -> Optional.empty();
             };
@@ -302,17 +300,34 @@ public class PricingService {
         System.out.println("[DEBUG] 尝试从新浪财经获取 " + ticker + " 的价格...");
         System.out.println("[DEBUG] 原始 ticker: " + ticker);
         
-        if (ticker.matches("\\d{6}")) {
-            // A 股代码，需要添加市场前缀
-            String prefix = ticker.startsWith("6") || ticker.startsWith("9") ? "sh" : "sz";
-            symbol = prefix + ticker;
-            System.out.println("[DEBUG] 识别为 A 股，添加前缀：" + prefix);
-        } else if (ticker.matches("\\d{4,5}")) {
-            // 港股代码（4-5 位数字）
-            symbol = "hk" + ticker;
-            System.out.println("[DEBUG] 识别为港股，添加前缀：hk");
+        // 处理多种输入格式：600519, SH600519, sh600519, 000001, SZ000001 等
+        String cleanTicker = ticker.trim().toUpperCase();
+        
+        // 如果已经包含前缀，提取纯数字部分
+        if (cleanTicker.matches("^(SH|SZ|HK)\\d{4,6}$")) {
+            String prefix = cleanTicker.substring(0, 2).toLowerCase();
+            String digits = cleanTicker.substring(2);
+            
+            if (digits.length() == 6) {
+                // A 股（6 位数字）
+                symbol = prefix + digits;
+                System.out.println("[DEBUG] 识别为带前缀的 A 股/港股代码，标准化为：" + symbol);
+            } else if (digits.length() >= 4 && digits.length() <= 5) {
+                // 港股（4-5 位数字）
+                symbol = "hk" + digits;
+                System.out.println("[DEBUG] 识别为港股代码，标准化为：" + symbol);
+            }
+        } else if (cleanTicker.matches("\\d{6}")) {
+            // 纯 6 位数字 - A 股
+            String prefix = cleanTicker.startsWith("6") || cleanTicker.startsWith("9") ? "sh" : "sz";
+            symbol = prefix + cleanTicker;
+            System.out.println("[DEBUG] 识别为 A 股（纯 6 位数字），添加前缀：" + prefix + "，最终：" + symbol);
+        } else if (cleanTicker.matches("\\d{4,5}")) {
+            // 纯 4-5 位数字 - 港股
+            symbol = "hk" + cleanTicker;
+            System.out.println("[DEBUG] 识别为港股（纯 4-5 位数字），添加前缀：hk，最终：" + symbol);
         } else {
-            System.out.println("[DEBUG] 使用原始 ticker: " + symbol);
+            System.out.println("[DEBUG] 使用原始 ticker（可能是美股或其他）: " + symbol);
         }
         
         // 正确的新浪财经 URL 格式：http://hq.sinajs.cn/list=sz000001
@@ -325,7 +340,7 @@ public class PricingService {
             System.out.println("[DEBUG] 发送 HTTP GET 请求...");
             // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            headers.set("User-Agent", "Mozilla/5.0 ");
             headers.set("Referer", "https://finance.sina.com.cn/");
             headers.set("Accept", "*/*");
             
@@ -366,12 +381,20 @@ public class PricingService {
                         }
                     } else {
                         System.out.println("[DEBUG] ✗ 新浪财经响应格式错误，字段数不足：" + parts.length);
+                        System.out.println("[DEBUG] 可能原因：");
+                        System.out.println("  1. 股票代码不存在或已退市");
+                        System.out.println("  2. 股票代码格式不正确");
+                        System.out.println("  3. API 请求过于频繁被限流");
                     }
                 } else {
                     System.out.println("[DEBUG] ✗ 新浪财经响应中没有找到引号包裹的数据");
                 }
             } else {
                 System.out.println("[DEBUG] ✗ 新浪财经返回空响应");
+                System.out.println("[DEBUG] 可能原因：");
+                System.out.println("  1. 股票代码格式错误（应为 sh600519 或 sz000001）");
+                System.out.println("  2. 该股票不存在或已退市");
+                System.out.println("  3. 网络问题或 API 限流");
             }
         } catch (Exception e) {
             System.out.println("[DEBUG] ✗ 新浪财经请求失败：" + e.getMessage());
@@ -380,14 +403,6 @@ public class PricingService {
         }
         System.out.println("============================================\n");
         return Optional.empty();
-    }
-
-    private Optional<Double> yahooLastClose(String ticker) {
-        List<TimePrice> series = fetchYahooAdjCloseSeries(ticker, 7);
-        if (series.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(series.get(series.size() - 1).price());
     }
 
     /** 获取 Massive.com 前一天收盘价 */
@@ -544,9 +559,10 @@ public class PricingService {
             System.out.println("[DEBUG] 发送 HTTP GET 请求...");
             // 新浪财经需要 User-Agent 和 Referer，否则返回 403 Forbidden
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            headers.set("User-Agent", "Mozilla/5.0");
             headers.set("Referer", "https://finance.sina.com.cn/");
             headers.set("Accept", "*/*");
+
             
             String body = restClient.get()
                 .uri(url)
@@ -602,71 +618,6 @@ public class PricingService {
 
     public record TimePrice(Instant day, double price) {}
 
-    public List<TimePrice> fetchYahooAdjCloseSeries(String ticker, int days) {
-        int span = Math.max(days + 5, 7);
-        Instant end = Instant.now();
-        Instant start = end.minusSeconds(span * 86400L);
-        long p1 = start.getEpochSecond();
-        long p2 = end.getEpochSecond();
-        String symbol = ticker.trim().toUpperCase();
-        String cacheKey = symbol + ":" + days;
-        CacheEntry<List<TimePrice>> cached = yahooSeriesCache.get(cacheKey);
-        if (cached != null && isFresh(cached.createdAtMs, SERIES_CACHE_TTL_MS)) {
-            return cached.value;
-        }
-        String url =
-                "https://query1.finance.yahoo.com/v7/finance/download/"
-                        + symbol
-                        + "?period1="
-                        + p1
-                        + "&period2="
-                        + p2
-                        + "&interval=1d&events=history&includeAdjustedClose=true";
-        String body;
-        try {
-            body =
-                    restClient
-                            .get()
-                            .uri(url)
-                            .header(HttpHeaders.USER_AGENT, "Mozilla/5.0 (compatible; PortfolioDemo/1.0)")
-                            .retrieve()
-                            .body(String.class);
-        } catch (RestClientException e) {
-            return List.of();
-        }
-        if (body == null) {
-            return List.of();
-        }
-        List<TimePrice> out = new ArrayList<>();
-        String[] lines = body.split("\\R");
-        for (String line : lines) {
-            if (line.isBlank() || line.startsWith("Date")) {
-                continue;
-            }
-            String[] parts = line.split(",");
-            if (parts.length < 6) {
-                continue;
-            }
-            try {
-                LocalDate d = LocalDate.parse(parts[0], YAHOO_DATE);
-                double adj = Double.parseDouble(parts[5]);
-                Instant day = d.atStartOfDay().toInstant(ZoneOffset.UTC);
-                out.add(new TimePrice(day, adj));
-            } catch (Exception ignored) {
-                // skip bad row
-            }
-        }
-        out.sort(Comparator.comparing(TimePrice::day));
-        if (out.size() > days) {
-            out = out.subList(out.size() - days, out.size());
-        }
-        List<TimePrice> result = List.copyOf(out);
-        if (!result.isEmpty()) {
-            yahooSeriesCache.put(cacheKey, new CacheEntry<>(result, System.currentTimeMillis()));
-        }
-        return result;
-    }
-
     /** 按日汇总股票/债券持仓市值（现金按每日加常数 cashTotal）。 */
     public List<DateValue> portfolioValueSeries(
             List<Map.Entry<String, Double>> tickerQty, double cashTotal, int days) {
@@ -689,10 +640,6 @@ public class PricingService {
         Map<LocalDate, Double> byDate = new TreeMap<>();
         for (Map.Entry<String, Double> e : tickerQty) {
             List<TimePrice> series = fetchCachedDailyCloseSeries(e.getKey(), days);
-            if (series.isEmpty()) {
-                // 回退：如果缓存接口失败/不支持，才使用 Yahoo 历史数据
-                series = fetchYahooAdjCloseSeries(e.getKey(), days);
-            }
             for (TimePrice tp : series) {
                 LocalDate d = tp.day().atZone(ZoneOffset.UTC).toLocalDate();
                 // e.getValue() 理论上不为空（qty 来自数据库 nullable=false 字段），但这里做防御式处理

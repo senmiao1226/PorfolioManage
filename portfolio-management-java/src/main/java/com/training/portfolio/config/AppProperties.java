@@ -25,6 +25,6 @@ public class AppProperties {
         private String alphaVantageBase = "https://www.alphavantage.co/query";
         private String alphaVantageApiKey = "demo";
         private String sinaBase = "https://hq.sinajs.cn";
-        private String providers = "massive,alphavantage,sina,yahoo,cached";
+        private String providers = "massive,alphavantage,sina,cached";
     }
 }

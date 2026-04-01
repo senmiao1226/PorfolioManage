@@ -39,20 +39,11 @@ public class HealthController {
         Map<String, Object> result = new HashMap<>();
         result.put("ticker", ticker);
         result.put("requestedAt", Instant.now());
-        
+
         // 尝试获取价格
         Optional<Double> price = pricingService.priceForHolding(AssetType.stock, ticker);
         result.put("currentPrice", price.orElse(null));
-        
-        // 获取历史数据（最近 30 天）
-        try {
-            var history = pricingService.fetchYahooAdjCloseSeries(ticker, 30);
-            result.put("historyDays", history.size());
-            result.put("history", history);
-        } catch (Exception e) {
-            result.put("historyError", e.getMessage());
-        }
-        
+
         return result;
     }
 }

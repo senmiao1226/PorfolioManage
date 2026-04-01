@@ -42,8 +42,8 @@ app:
     sina-base: "https://hq.sinajs.cn"
     # 原始课程缓存接口（保留）
     cached-price-base: "https://c4rm9elh30.execute-api.us-east-1.amazonaws.com/default/cachedPriceData"
-    # 数据源优先级：massive > alphavantage > sina > yahoo > cached
-    providers: "massive,alphavantage,sina,yahoo,cached"
+    # 数据源优先级：massive > alphavantage > sina > cached
+    providers: "massive,alphavantage,sina,cached"
 
 springdoc:
   api-docs:

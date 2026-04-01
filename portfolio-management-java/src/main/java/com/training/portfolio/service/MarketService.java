@@ -149,24 +149,16 @@ public class MarketService {
 
         Double currentPrice = priceOpt.get();
 
-        // 获取历史价格（用于计算涨跌）
-        List<PricingService.TimePrice> history = pricingService.fetchYahooAdjCloseSeries(normalizedTicker, 2);
-        Double previousClose = history.size() >= 2
-                ? history.get(history.size() - 2).price()
-                : currentPrice;
+        // 使用当前价格作为前收盘价（简化处理）
+        Double previousClose = currentPrice;
 
         Double priceChange = currentPrice - previousClose;
         Double priceChangePercent = previousClose != 0
                 ? (priceChange / previousClose) * 100
                 : 0.0;
 
-        // 构建价格历史
-        List<PricePointDto> priceHistory = history.stream()
-                .map(tp -> new PricePointDto(
-                        tp.day().toString(),
-                        tp.price()
-                ))
-                .collect(Collectors.toList());
+        // 构建空价格历史（简化处理）
+        List<PricePointDto> priceHistory = List.of();
 
         // 查询持仓信息
         Double holdingQuantity = null;
@@ -239,9 +231,8 @@ public class MarketService {
         return List.of(
                 new DataProviderDto("Cached API", "课程提供的缓存价格数据", true, "1"),
                 new DataProviderDto("Sina Finance", "新浪财经 - A股/港股", true, "2"),
-                new DataProviderDto("Yahoo Finance", "雅虎财经 - 全球股票", true, "3"),
-                new DataProviderDto("Alpha Vantage", "Alpha Vantage API", false, "4"),
-                new DataProviderDto("Massive", "Massive.com API", false, "5")
+                new DataProviderDto("Alpha Vantage", "Alpha Vantage API", false, "3"),
+                new DataProviderDto("Massive", "Massive.com API", false, "4")
         );
     }
 
@@ -285,19 +276,9 @@ public class MarketService {
         Double currentPrice = priceOpt.get();
         Double marketValue = currentPrice * totalQuantity;
 
-        // 计算涨跌（需要历史价格）
-        Double priceChange = null;
-        Double priceChangePercent = null;
-        try {
-            List<PricingService.TimePrice> history = pricingService.fetchYahooAdjCloseSeries(ticker, 2);
-            if (history.size() >= 2) {
-                Double previousClose = history.get(history.size() - 2).price();
-                priceChange = currentPrice - previousClose;
-                priceChangePercent = (priceChange / previousClose) * 100;
-            }
-        } catch (Exception e) {
-            // 忽略历史价格获取失败
-        }
+        // 计算涨跌（简化处理，无历史价格）
+        Double priceChange = 0.0;
+        Double priceChangePercent = 0.0;
 
         return new MarketPriceWithHoldingDto(
                 ticker,

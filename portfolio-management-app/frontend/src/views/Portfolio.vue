@@ -162,7 +162,7 @@
         </div>
         <div class="form-group" v-if="holdingForm.assetType !== 'cash'">
           <label>股票代码</label>
-          <input v-model="holdingForm.ticker" placeholder="如: AAPL" />
+          <input v-model="holdingForm.ticker" @change="onTickerInput" placeholder="eg:AAPL" />
         </div>
         <div class="form-group">
           <label>名称（可选）</label>
@@ -328,8 +328,34 @@ async function saveHolding() {
     closeHoldingModal();
     await refreshData();
   } catch (e) {
-    alert('保存失败: ' + e.message);
+    alert('保存失败：' + e.message);
   }
+}
+
+// 当用户输入股票代码时，自动获取价格
+let tickerDebounceTimer = null;
+
+async function onTickerInput() {
+  const ticker = holdingForm.value.ticker;
+  if (!ticker || holdingForm.value.assetType === 'cash' || editingHolding.value) {
+    return;
+  }
+  
+  // 防抖：避免用户每输入一个字母就触发请求
+  clearTimeout(tickerDebounceTimer);
+  tickerDebounceTimer = setTimeout(async () => {
+    try {
+      // 获取股票详情
+      const detail = await api.getAssetDetail(ticker.toUpperCase(), null);
+      if (detail && detail.currentPrice) {
+        // 自动填充当前价格作为参考
+        holdingForm.value.averageCost = detail.currentPrice;
+        console.log('自动填充价格:', detail.currentPrice);
+      }
+    } catch (e) {
+      console.log('获取股票价格失败:', e.message);
+    }
+  }, 500); // 500ms 防抖
 }
 
 async function deleteHolding(id) {

@@ -86,6 +86,26 @@ public class PortfolioService {
         }
         Portfolio p = portfolioRepository.findById(portfolioId).orElseThrow(() -> notFound("Portfolio not found"));
         validateCreate(req);
+        
+        // 如果是股票或债券，尝试获取当前市场价格（仅查询当前添加的股票，避免 API 限制）
+        Double marketPrice = null;
+        if ((req.assetType() == AssetType.stock || req.assetType() == AssetType.bond) 
+            && req.ticker() != null && !req.ticker().isBlank()) {
+            System.out.println("\n========== [添加持仓 - 获取市价] ==========");
+            System.out.println("[DEBUG] 持仓类型：" + req.assetType());
+            System.out.println("[DEBUG] 股票代码：" + req.ticker());
+            System.out.println("[DEBUG] 尝试获取市场价格...");
+            
+            Optional<Double> priceOpt = pricingService.priceForHolding(req.assetType(), req.ticker());
+            if (priceOpt.isPresent()) {
+                marketPrice = priceOpt.get();
+                System.out.println("[DEBUG] ✓ 成功获取市场价格：" + marketPrice);
+            } else {
+                System.out.println("[DEBUG] ✗ 未能获取市场价格，将为空");
+            }
+            System.out.println("============================================\n");
+        }
+        
         Holding h = new Holding();
         h.setPortfolio(p);
         h.setAssetType(req.assetType());
@@ -95,7 +115,18 @@ public class PortfolioService {
         h.setAverageCost(req.averageCost());
         h.setNotes(req.notes());
         h = holdingRepository.save(h);
-        return toHoldingResponse(h);
+        
+        // 返回响应时包含市场价格
+        return new PortfolioDtos.HoldingResponse(
+                h.getId(),
+                h.getPortfolio().getId(),
+                h.getAssetType(),
+                h.getTicker(),
+                h.getName(),
+                h.getQuantity(),
+                h.getAverageCost(),
+                marketPrice,
+                h.getNotes());
     }
 
     public PortfolioDtos.HoldingResponse updateHolding(Long holdingId, PortfolioDtos.HoldingUpdateRequest req) {
@@ -272,6 +303,7 @@ public class PortfolioService {
                 h.getName(),
                 h.getQuantity(),
                 h.getAverageCost(),
+                null,  // marketPrice 仅在添加持仓时返回，列表查询时不返回以避免频繁 API 调用
                 h.getNotes());
     }
 
