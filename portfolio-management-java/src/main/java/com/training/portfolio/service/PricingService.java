@@ -398,7 +398,7 @@ public class PricingService {
         // 使用 Massive.com v1 API 获取前一天收盘价
         // 文档：https://massive.com/docs/rest
         // 正确格式：https://api.massive.com/v1/open-close/AAPL/2023-01-09?adjusted=true&apiKey=MY_KEY
-        LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDate yesterday = LocalDate.now().minusDays(2);
         String url = base + "/open-close/" + ticker + "/" + yesterday + "?adjusted=true&apiKey=" + apiKey;
         
         System.out.println("\n========== [MASSIVE 前一天收盘价请求] ==========");

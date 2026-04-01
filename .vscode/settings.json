@@ -9,5 +9,6 @@
   "java.jdt.ls.java.home": "D:\\software\\Java\\jdk17",
   "maven.executable.path": "D:\\Program Files\\Devlopment\\apache-maven-3.8.8\\bin\\mvn.cmd",
   "java.import.maven.enabled": true,
-  "java.configuration.updateBuildConfiguration": "interactive"
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.compile.nullAnalysis.mode": "automatic"
 }
