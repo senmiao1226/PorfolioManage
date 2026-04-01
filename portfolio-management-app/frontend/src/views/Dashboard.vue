@@ -97,7 +97,7 @@
               </div>
               <div class="stat">
                 <span class="stat-label">{{ t('dashboard.holdings') }}</span>
-                <span class="stat-value">{{ p.holdingCount }}{{ lang === 'zh' ? '个' : '' }}</span>
+                <span class="stat-value">{{ p.holdingCount }}{{ currentLang.value === 'zh' ? '个' : '' }}</span>
               </div>
             </div>
           </div>
@@ -127,10 +127,9 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
-import { useI18n } from '../composables/useI18n';
+import { t, currentLang } from '../locales';
 
 const router = useRouter();
-const { lang, t } = useI18n();
 
 const loading = ref(false);
 const error = ref('');
@@ -188,7 +187,9 @@ function goToPortfolio(id) {
   router.push(`/portfolio/${id}`);
 }
 
-onMounted(loadData);
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <style scoped>

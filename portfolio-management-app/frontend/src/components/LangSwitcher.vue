@@ -1,6 +1,6 @@
 <template>
   <button class="lang-btn" @click="toggleLang">
-    {{ currentLang === 'zh' ? 'EN' : '中文' }}
+    {{ currentLang.value === 'zh' ? 'EN' : '中文' }}
   </button>
 </template>
 
@@ -8,7 +8,8 @@
 import { currentLang, setLang } from '../locales';
 
 function toggleLang() {
-  setLang(currentLang === 'zh' ? 'en' : 'zh');
+  const newLang = currentLang.value === 'zh' ? 'en' : 'zh';
+  setLang(newLang);
 }
 </script>
 

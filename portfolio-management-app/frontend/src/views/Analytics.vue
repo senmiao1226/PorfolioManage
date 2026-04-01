@@ -7,9 +7,9 @@
 
     <!-- 组合选择器 -->
     <div class="portfolio-selector">
-      <label>选择组合：</label>
+      <label>{{ t('analytics.selectPortfolio') }}：</label>
       <select v-model="selectedPortfolioId" @change="onPortfolioChange">
-        <option value="">全局汇总</option>
+        <option value="">{{ t('analytics.globalSummary') }}</option>
         <option v-for="p in portfolios" :key="p.id" :value="p.id">
           {{ p.name }}
         </option>
@@ -19,47 +19,47 @@
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <!-- 错误提示 -->
     <div v-else-if="error" class="error-message">
       {{ error }}
-      <button @click="loadData" class="retry-btn">重试</button>
+      <button @click="loadData" class="retry-btn">{{ t('common.retry') }}</button>
     </div>
 
     <!-- 数据展示 -->
     <div v-else class="analytics-content">
       <!-- 业绩统计 -->
       <section class="card">
-        <h2>业绩统计</h2>
+        <h2>{{ t('analytics.performanceStats') }}</h2>
         <div v-if="performanceStats" class="stats-grid">
           <div class="stat-card">
-            <div class="stat-label">总成本</div>
+            <div class="stat-label">{{ t('analytics.totalCost') }}</div>
             <div class="stat-value">{{ fmtMoney(performanceStats.totalCost) }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">总市值</div>
+            <div class="stat-label">{{ t('analytics.totalMarketValue') }}</div>
             <div class="stat-value">{{ fmtMoney(performanceStats.totalMarketValue) }}</div>
           </div>
           <div class="stat-card" :class="{ 'positive': performanceStats.unrealizedPnl >= 0, 'negative': performanceStats.unrealizedPnl < 0 }">
-            <div class="stat-label">未实现盈亏</div>
+            <div class="stat-label">{{ t('analytics.unrealizedPnl') }}</div>
             <div class="stat-value">
               {{ fmtMoney(performanceStats.unrealizedPnl) }}
               <span class="percent">({{ fmtPercent(performanceStats.returnPercent) }})</span>
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">持仓数量</div>
-            <div class="stat-value">{{ performanceStats.holdingCount }}个</div>
+            <div class="stat-label">{{ t('analytics.holdingCount') }}</div>
+            <div class="stat-value">{{ performanceStats.holdingCount }}{{ currentLang.value === 'zh' ? '个' : '' }}</div>
           </div>
         </div>
-        <p v-else class="empty">暂无业绩数据</p>
+        <p v-else class="empty">{{ t('analytics.noPerformanceData') }}</p>
       </section>
 
       <!-- 资产配置饼图 -->
       <section class="card">
-        <h2>资产配置</h2>
+        <h2>{{ t('analytics.assetAllocation') }}</h2>
         <div v-if="assetAllocation?.length" class="allocation-section">
           <div class="pie-chart">
             <div class="pie" :style="pieStyle"></div>
@@ -75,9 +75,9 @@
             <table>
               <thead>
                 <tr>
-                  <th>资产类型</th>
-                  <th>市值</th>
-                  <th>占比</th>
+                  <th>{{ t('analytics.assetType') }}</th>
+                  <th>{{ t('analytics.marketValue') }}</th>
+                  <th>{{ t('analytics.percentage') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,13 +95,13 @@
             </table>
           </div>
         </div>
-        <p v-else class="empty">暂无资产配置数据</p>
+        <p v-else class="empty">{{ t('analytics.noAllocationData') }}</p>
       </section>
 
       <!-- 历史走势 -->
       <section class="card">
         <div class="card-header">
-          <h2>历史走势</h2>
+          <h2>{{ t('analytics.historicalTrend') }}</h2>
           <div class="time-selector">
             <button 
               v-for="days in [7, 30, 90, 365]" 
@@ -109,7 +109,7 @@
               :class="{ active: selectedDays === days }"
               @click="changeDays(days)"
             >
-              {{ days }}天
+              {{ days }}{{ t('analytics.days') }}
             </button>
           </div>
         </div>
@@ -142,25 +142,25 @@
           </div>
           <div class="chart-info">
             <div class="info-item">
-              <span>最高:</span>
+              <span>{{ t('analytics.highest') }}:</span>
               <span class="positive">{{ fmtMoney(maxValue) }}</span>
             </div>
             <div class="info-item">
-              <span>最低:</span>
+              <span>{{ t('analytics.lowest') }}:</span>
               <span class="negative">{{ fmtMoney(minValue) }}</span>
             </div>
             <div class="info-item">
-              <span>平均:</span>
+              <span>{{ t('analytics.average') }}:</span>
               <span>{{ fmtMoney(avgValue) }}</span>
             </div>
           </div>
         </div>
-        <p v-else class="empty">暂无历史数据</p>
+        <p v-else class="empty">{{ t('analytics.noHistoricalData') }}</p>
       </section>
 
       <!-- 前N大持仓 -->
       <section class="card" v-if="selectedPortfolioId">
-        <h2>前10大持仓</h2>
+        <h2>{{ t('analytics.topHoldings') }}</h2>
         <div v-if="topHoldings?.length" class="holdings-list">
           <div v-for="(item, idx) in topHoldings" :key="item.ticker" class="holding-item">
             <div class="holding-rank">{{ idx + 1 }}</div>
@@ -170,8 +170,8 @@
                 <span class="type">{{ formatAssetType(item.assetType) }}</span>
               </div>
               <div class="holding-detail">
-                <span>数量: {{ item.quantity }}</span>
-                <span>成本: {{ fmtMoney(item.costBasis) }}</span>
+                <span>{{ t('portfolio.quantity') }}: {{ item.quantity }}</span>
+                <span>{{ t('portfolio.totalCost') }}: {{ fmtMoney(item.costBasis) }}</span>
               </div>
             </div>
             <div class="holding-value">
@@ -182,7 +182,7 @@
             </div>
           </div>
         </div>
-        <p v-else class="empty">暂无持仓数据</p>
+        <p v-else class="empty">{{ t('analytics.noHoldingsData') }}</p>
       </section>
     </div>
   </div>
@@ -191,9 +191,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { api } from '../api';
-import { useI18n } from '../composables/useI18n';
-
-const { lang, t } = useI18n();
+import { t, currentLang } from '../locales';
 
 const loading = ref(false);
 const error = ref('');
@@ -234,13 +232,13 @@ function fmtPercent(v) {
 }
 
 function formatAssetType(type) {
-  const map = {
-    'stock': '股票',
-    'bond': '债券',
-    'fund': '基金',
-    'cash': '现金'
+  const keyMap = {
+    'stock': 'assetType.stock',
+    'bond': 'assetType.bond',
+    'fund': 'assetType.fund',
+    'cash': 'assetType.cash'
   };
-  return map[type] || type;
+  return t(keyMap[type]) || type;
 }
 
 function getColor(type) {

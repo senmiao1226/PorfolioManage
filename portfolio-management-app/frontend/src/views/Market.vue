@@ -75,7 +75,7 @@
               <span class="change positive">+{{ item.priceChangePercent?.toFixed(2) }}%</span>
             </div>
           </div>
-          <p v-else class="empty">暂无数据</p>
+          <p v-else class="empty">{{ t('common.noData') }}</p>
         </section>
 
         <section class="card">
@@ -88,7 +88,7 @@
               <span class="change negative">{{ item.priceChangePercent?.toFixed(2) }}%</span>
             </div>
           </div>
-          <p v-else class="empty">暂无数据</p>
+          <p v-else class="empty">{{ t('common.noData') }}</p>
         </section>
       </div>
 
@@ -115,7 +115,7 @@
             </tbody>
           </table>
         </div>
-        <p v-else class="empty">暂无数据</p>
+        <p v-else class="empty">{{ t('common.noData') }}</p>
       </section>
 
       <!-- 搜索股票 -->
@@ -143,10 +143,10 @@
     <div v-if="detailModalOpen" class="modal-backdrop" @click.self="closeDetail">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ detailData?.ticker }} 详情</h3>
+          <h3>{{ detailData?.ticker }} {{ t('market.stockDetail') }}</h3>
           <button class="close-btn" @click="closeDetail">×</button>
         </div>
-        <div v-if="detailLoading" class="modal-loading">加载中...</div>
+        <div v-if="detailLoading" class="modal-loading">{{ t('common.loading') }}</div>
         <div v-else-if="detailData" class="modal-content">
           <div class="detail-price">
             <span class="current">{{ fmtMoney(detailData.currentPrice) }}</span>
@@ -156,22 +156,22 @@
           </div>
           <div class="detail-info">
             <div class="info-row">
-              <span>昨收:</span>
+              <span>{{ t('market.previousClose') }}:</span>
               <span>{{ fmtMoney(detailData.previousClose) }}</span>
             </div>
             <div class="info-row">
-              <span>涨跌:</span>
+              <span>{{ t('market.priceChange') }}:</span>
               <span :class="{ 'positive': detailData.priceChange > 0, 'negative': detailData.priceChange < 0 }">
                 {{ detailData.priceChange > 0 ? '+' : '' }}{{ fmtMoney(detailData.priceChange) }}
               </span>
             </div>
             <div class="info-row" v-if="detailData.isInPortfolio">
-              <span>我的持仓:</span>
-              <span>{{ detailData.holdingQuantity }} 股</span>
+              <span>{{ t('market.myPosition') }}:</span>
+              <span>{{ detailData.holdingQuantity }} {{ t('market.shares') }}</span>
             </div>
           </div>
           <div v-if="detailData.priceHistory?.length" class="mini-chart">
-            <h4>近期走势</h4>
+            <h4>{{ t('market.recentTrend') }}</h4>
             <div class="chart-bars">
               <div 
                 v-for="(point, idx) in detailData.priceHistory" 
@@ -191,9 +191,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { api } from '../api';
-import { useI18n } from '../composables/useI18n';
-
-const { lang, t } = useI18n();
+import { t, currentLang } from '../locales';
 
 const loading = ref(false);
 const error = ref('');
@@ -255,9 +253,9 @@ async function loadData() {
     // 加载热门股票
     popularStocks.value = await api.getPopularStocks();
     
-    updateTime.value = new Date().toLocaleString('zh-CN');
+    updateTime.value = new Date().toLocaleString(currentLang.value === 'zh' ? 'zh-CN' : 'en-US');
   } catch (e) {
-    error.value = e.message || '加载失败';
+    error.value = e.message || t('market.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -308,7 +306,9 @@ function getBarHeight(price) {
   return ((price - min) / range) * 80 + 10;
 }
 
-onMounted(loadData);
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <style scoped>

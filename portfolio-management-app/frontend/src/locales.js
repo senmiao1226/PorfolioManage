@@ -122,7 +122,10 @@ export const messages = {
       loading: '加载中...',
       ticker: '代码',
       name: '名称',
-      price: '价格'
+      price: '价格',
+      stockDetail: '详情',
+      shares: '股',
+      loadFailed: '加载失败'
     },
     
     // Analytics
@@ -131,6 +134,20 @@ export const messages = {
       subtitle: '深度分析投资组合表现',
       selectPortfolio: '选择组合',
       globalSummary: '全局汇总',
+      performanceStats: '业绩统计',
+      assetAllocation: '资产配置',
+      historicalTrend: '历史走势',
+      topHoldings: '前 10 大持仓',
+      totalCost: '总成本',
+      totalMarketValue: '总市值',
+      unrealizedPnl: '未实现盈亏',
+      holdingCount: '持仓数量',
+      marketValue: '市值',
+      percentage: '占比',
+      highest: '最高',
+      lowest: '最低',
+      average: '平均',
+      days: '天',
       performanceStats: '业绩统计',
       assetAllocation: '资产配置',
       historicalTrend: '历史走势',
@@ -157,6 +174,18 @@ export const messages = {
       bond: '债券',
       fund: '基金',
       cash: '现金'
+    },
+    
+    // Validations & Messages
+    messages: {
+      confirmDeletePortfolio: '确定删除该组合？',
+      confirmDeleteHolding: '确定删除该持仓？',
+      createFailed: '创建失败',
+      deleteFailed: '删除失败',
+      saveFailed: '保存失败',
+      quantityMustBePositive: '数量必须大于0，请重新输入',
+      tickerRequired: '请输入股票代码',
+      invalidTicker: '股票代码无效或无法获取价格，请重新输入'
     }
   },
   
@@ -269,7 +298,10 @@ export const messages = {
       loading: 'Loading...',
       ticker: 'Ticker',
       name: 'Name',
-      price: 'Price'
+      price: 'Price',
+      stockDetail: 'Details',
+      shares: 'shares',
+      loadFailed: 'Load failed'
     },
     
     // Analytics
@@ -278,6 +310,20 @@ export const messages = {
       subtitle: 'In-depth portfolio performance analysis',
       selectPortfolio: 'Select Portfolio',
       globalSummary: 'Global Summary',
+      performanceStats: 'Performance Stats',
+      assetAllocation: 'Asset Allocation',
+      historicalTrend: 'Historical Trend',
+      topHoldings: 'Top 10 Holdings',
+      totalCost: 'Total Cost',
+      totalMarketValue: 'Total Market Value',
+      unrealizedPnl: 'Unrealized P/L',
+      holdingCount: 'Holdings Count',
+      marketValue: 'Market Value',
+      percentage: 'Percentage',
+      highest: 'Highest',
+      lowest: 'Lowest',
+      average: 'Average',
+      days: 'Days',
       performanceStats: 'Performance Stats',
       assetAllocation: 'Asset Allocation',
       historicalTrend: 'Historical Trend',
@@ -308,17 +354,30 @@ export const messages = {
       bond: 'Bond',
       fund: 'Fund',
       cash: 'Cash'
+    },
+    
+    // Validations & Messages
+    messages: {
+      confirmDeletePortfolio: 'Delete this portfolio?',
+      confirmDeleteHolding: 'Delete this holding?',
+      createFailed: 'Create failed',
+      deleteFailed: 'Delete failed',
+      saveFailed: 'Save failed',
+      quantityMustBePositive: 'Quantity must be greater than 0',
+      tickerRequired: 'Please enter stock ticker',
+      invalidTicker: 'Invalid ticker or unable to get price'
     }
   }
 };
 
-// 当前语言
-export let currentLang = localStorage.getItem('portfolio_lang') || 'zh';
+// 当前语言 - 使用 ref 使其响应式
+import { ref } from 'vue';
+export const currentLang = ref(localStorage.getItem('portfolio_lang') || 'zh');
 
 // 获取翻译文本
 export function t(key) {
   const keys = key.split('.');
-  let value = messages[currentLang];
+  let value = messages[currentLang.value];
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {
       value = value[k];
@@ -329,12 +388,11 @@ export function t(key) {
   return value || key;
 }
 
-// 设置语言
+// 设置语言 - 直接修改 ref，Vue 会自动触发重新渲染
 export function setLang(lang) {
   if (messages[lang]) {
-    currentLang = lang;
+    currentLang.value = lang;
     localStorage.setItem('portfolio_lang', lang);
-    window.dispatchEvent(new CustomEvent('lang-change', { detail: { lang } }));
   }
 }
 

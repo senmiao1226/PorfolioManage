@@ -194,10 +194,9 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '../api';
-import { useI18n } from '../composables/useI18n';
+import { t } from '../locales';
 
 const route = useRoute();
-const { lang, t } = useI18n();
 
 const loading = ref(false);
 const portfolios = ref([]);
@@ -234,8 +233,13 @@ function fmtMoney(v) {
 }
 
 function formatAssetType(type) {
-  const map = { 'stock': '股票', 'bond': '债券', 'fund': '基金', 'cash': '现金' };
-  return map[type] || type;
+  const keyMap = {
+    'stock': 'assetType.stock',
+    'bond': 'assetType.bond',
+    'fund': 'assetType.fund',
+    'cash': 'assetType.cash'
+  };
+  return t(keyMap[type]) || type;
 }
 
 async function loadPortfolios() {
@@ -279,12 +283,12 @@ async function createPortfolio() {
     newPortfolio.value = { name: '', description: '', baseCurrency: 'USD' };
     await loadPortfolios();
   } catch (e) {
-    alert('创建失败: ' + e.message);
+    alert(t('messages.createFailed') + ': ' + e.message);
   }
 }
 
 async function deletePortfolio(id) {
-  if (!confirm('确定删除该组合？')) return;
+  if (!confirm(t('messages.confirmDeletePortfolio'))) return;
   try {
     await api.deletePortfolio(id);
     if (selectedPortfolio.value?.id === id) {
@@ -293,7 +297,7 @@ async function deletePortfolio(id) {
     }
     await loadPortfolios();
   } catch (e) {
-    alert('删除失败: ' + e.message);
+    alert(t('messages.deleteFailed') + ': ' + e.message);
   }
 }
 
@@ -326,14 +330,14 @@ function closeHoldingModal() {
 async function saveHolding() {
   // 校验数量必须大于0
   if (!holdingForm.value.quantity || holdingForm.value.quantity <= 0) {
-    alert('数量必须大于0，请重新输入');
+    alert(t('messages.quantityMustBePositive'));
     return;
   }
   
   // 校验股票代码（非现金类型必须有ticker）
   if (holdingForm.value.assetType !== 'cash') {
     if (!holdingForm.value.ticker || holdingForm.value.ticker.trim() === '') {
-      alert('请输入股票代码');
+      alert(t('messages.tickerRequired'));
       return;
     }
     
@@ -341,11 +345,11 @@ async function saveHolding() {
     try {
       const detail = await api.getAssetDetail(holdingForm.value.ticker.toUpperCase(), null);
       if (!detail || !detail.currentPrice) {
-        alert('股票代码无效或无法获取价格，请重新输入');
+        alert(t('messages.invalidTicker'));
         return;
       }
     } catch (e) {
-      alert('股票代码无效或无法获取价格，请重新输入');
+      alert(t('messages.invalidTicker'));
       return;
     }
   }
@@ -364,7 +368,7 @@ async function saveHolding() {
     closeHoldingModal();
     await refreshData();
   } catch (e) {
-    alert('保存失败：' + e.message);
+    alert(t('messages.saveFailed') + ': ' + e.message);
   }
 }
 
@@ -446,16 +450,18 @@ async function fetchHistoricalPriceForDate() {
 }
 
 async function deleteHolding(id) {
-  if (!confirm('确定删除该持仓？')) return;
+  if (!confirm(t('messages.confirmDeleteHolding'))) return;
   try {
     await api.deleteHolding(id);
     await refreshData();
   } catch (e) {
-    alert('删除失败: ' + e.message);
+    alert(t('messages.deleteFailed') + ': ' + e.message);
   }
 }
 
-onMounted(loadPortfolios);
+onMounted(() => {
+  loadPortfolios();
+});
 </script>
 
 <style scoped>

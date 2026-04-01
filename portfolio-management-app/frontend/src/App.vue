@@ -26,7 +26,7 @@
 
 <script setup>
 import LangSwitcher from './components/LangSwitcher.vue';
-import { t } from './locales';
+import { t, currentLang } from './locales';
 </script>
 
 <style>
