@@ -85,6 +85,14 @@ public final class MarketDtos {
     ) {}
 
     /**
+     * 涨跌榜一次返回（避免重复为每只股票拉两次价）
+     */
+    public record MarketMoversBundleDto(
+            List<MarketMoverDto> gainers,
+            List<MarketMoverDto> losers
+    ) {}
+
+    /**
      * 市场分类响应
      */
     public record MarketCategoryDto(

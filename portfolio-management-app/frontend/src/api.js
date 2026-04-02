@@ -91,6 +91,8 @@ export const api = {
     req(`/market/asset/${ticker}${portfolioId ? `?portfolioId=${portfolioId}` : ""}`),
   getTopGainers: (portfolioId, topN = 5) => req(`/market/movers/gainers/${portfolioId}?topN=${topN}`),
   getTopLosers: (portfolioId, topN = 5) => req(`/market/movers/losers/${portfolioId}?topN=${topN}`),
+  /** 单次请求返回 gainers + losers，减少重复行情调用 */
+  getMarketMoversBundle: (portfolioId, topN = 5) => req(`/market/movers/${portfolioId}?topN=${topN}`),
   getDataProviders: () => req("/market/providers"),
   // 查询历史价格（用于填充成交价）
   getHistoricalPrice: (ticker, date) => 

@@ -62,6 +62,7 @@ public final class PortfolioDtos {
             String assetType,
             String ticker,
             Double quantity,
+            LocalDate purchaseDate,
             Double marketPrice,
             Double marketValue,
             Double costBasis,

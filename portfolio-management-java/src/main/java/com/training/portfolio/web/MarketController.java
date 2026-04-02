@@ -137,6 +137,16 @@ public class MarketController {
     }
 
     /**
+     * 涨跌榜合并接口：一次请求返回盈利榜与亏损榜，避免前端并行打两次价
+     */
+    @GetMapping("/movers/{portfolioId}")
+    public ResponseEntity<MarketDtos.MarketMoversBundleDto> getMarketMoversBundle(
+            @PathVariable Long portfolioId,
+            @RequestParam(defaultValue = "5") int topN) {
+        return ResponseEntity.ok(marketService.getMarketMoversBundle(portfolioId, topN));
+    }
+
+    /**
      * 获取数据源提供商列表
      *
      * @return 提供商列表

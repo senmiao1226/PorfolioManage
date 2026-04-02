@@ -279,40 +279,68 @@ public class MarketService {
      * @param gainers true-盈利榜, false-亏损榜
      * @return 排行列表（按未实现盈亏排序）
      */
+    /**
+     * 一次计算涨跌榜，每只股票只查询一次现价（避免并行请求 gainers+losers 时重复打外部行情）
+     */
+    public MarketDtos.MarketMoversBundleDto getMarketMoversBundle(Long portfolioId, int topN) {
+        List<MarketDtos.MarketMoverDto> all = computeAllMoversForPortfolio(portfolioId);
+        List<MarketDtos.MarketMoverDto> gainers = all.stream()
+                .sorted((a, b) -> {
+                    double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
+                    double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
+                    return Double.compare(pnlB, pnlA);
+                })
+                .limit(topN)
+                .collect(Collectors.toList());
+        List<MarketDtos.MarketMoverDto> losers = all.stream()
+                .sorted((a, b) -> {
+                    double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
+                    double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
+                    return Double.compare(pnlA, pnlB);
+                })
+                .limit(topN)
+                .collect(Collectors.toList());
+        return new MarketDtos.MarketMoversBundleDto(gainers, losers);
+    }
+
     public List<MarketDtos.MarketMoverDto> getMarketMovers(Long portfolioId, int topN, boolean gainers) {
         System.out.println("\n[MarketService.getMarketMovers] 开始 | portfolioId=" + portfolioId + ", gainers=" + gainers);
-        
-        // 获取该组合的所有持仓
-        List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
-        System.out.println("[DEBUG] 获取到持仓记录数：" + holdings.size());
-        
-        // 按股票代码分组
-        Map<String, List<Holding>> holdingsByTicker = holdings.stream()
-                .filter(h -> h.getAssetType() != AssetType.cash)
-                .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
-                .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
-        
-        System.out.println("[DEBUG] 去重后的股票数量：" + holdingsByTicker.size());
 
-        // 计算每支股票的未实现盈亏
-        List<MarketDtos.MarketMoverDto> movers = holdingsByTicker.entrySet().stream()
-                .map(entry -> calculateUnrealizedPnl(entry.getKey(), entry.getValue()))
-                .filter(Objects::nonNull)
-                .filter(m -> m.unrealizedPnl() != null) // 只保留有盈亏数据的股票
+        List<MarketDtos.MarketMoverDto> all = computeAllMoversForPortfolio(portfolioId);
+
+        List<MarketDtos.MarketMoverDto> movers = all.stream()
                 .sorted((a, b) -> {
                     double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
                     double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
                     if (gainers) {
-                        return Double.compare(pnlB, pnlA); // 盈利从高到低
+                        return Double.compare(pnlB, pnlA);
                     } else {
-                        return Double.compare(pnlA, pnlB); // 亏损从低到高（最负的在前）
+                        return Double.compare(pnlA, pnlB);
                     }
                 })
                 .limit(topN)
                 .collect(Collectors.toList());
-        
+
         System.out.println("[MarketService.getMarketMovers] 完成 | 返回记录数=" + movers.size());
         return movers;
+    }
+
+    private List<MarketDtos.MarketMoverDto> computeAllMoversForPortfolio(Long portfolioId) {
+        List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
+        System.out.println("[DEBUG] 获取到持仓记录数：" + holdings.size());
+
+        Map<String, List<Holding>> holdingsByTicker = holdings.stream()
+                .filter(h -> h.getAssetType() != AssetType.cash)
+                .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
+                .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
+
+        System.out.println("[DEBUG] 去重后的股票数量：" + holdingsByTicker.size());
+
+        return holdingsByTicker.entrySet().stream()
+                .map(entry -> calculateUnrealizedPnl(entry.getKey(), entry.getValue()))
+                .filter(Objects::nonNull)
+                .filter(m -> m.unrealizedPnl() != null)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -488,8 +516,15 @@ public class MarketService {
 
     /**
      * 获取股票前收盘价（供Controller复用）
+     * 对于已知指数（SPY, QQQ等）直接返回硬编码价格，避免API调用
      */
     public Optional<Double> getPreviousClose(String ticker) {
+        String t = ticker.toUpperCase();
+        // 对于指数，直接返回硬编码价格，避免API调用
+        if (INDEX_PRICES.containsKey(t)) {
+            System.out.println("[MarketService.getPreviousClose] 指数 " + t + " 使用硬编码价格: " + INDEX_PRICES.get(t));
+            return Optional.of(INDEX_PRICES.get(t));
+        }
         return pricingService.fetchPreviousClose(AssetType.stock, ticker);
     }
 

@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,37 @@ public class PortfolioService {
     private final PortfolioRepository portfolioRepository;
     private final HoldingRepository holdingRepository;
     private final PricingService pricingService;
+
+    /** 短 TTL：Dashboard 并行请求会多次 getSummary；合并为一次定价遍历后的缓存。 */
+    private static final long SUMMARY_CACHE_TTL_MS = 25_000L;
+
+    private static final class PortfolioSummaryCacheEntry {
+        final PortfolioDtos.PortfolioSummaryResponse summary;
+        final long createdAtMs;
+
+        PortfolioSummaryCacheEntry(PortfolioDtos.PortfolioSummaryResponse summary, long createdAtMs) {
+            this.summary = summary;
+            this.createdAtMs = createdAtMs;
+        }
+    }
+
+    private final ConcurrentHashMap<Long, PortfolioSummaryCacheEntry> portfolioSummaryCache = new ConcurrentHashMap<>();
+    private static final int SUMMARY_STRIPE_COUNT = 64;
+    private final Object[] summaryStripes = new Object[SUMMARY_STRIPE_COUNT];
+
+    {
+        for (int i = 0; i < SUMMARY_STRIPE_COUNT; i++) {
+            summaryStripes[i] = new Object();
+        }
+    }
+
+    private Object summaryStripeFor(Long portfolioId) {
+        return summaryStripes[Math.floorMod(Long.hashCode(portfolioId), SUMMARY_STRIPE_COUNT)];
+    }
+
+    private void invalidatePortfolioSummaryCache(Long portfolioId) {
+        portfolioSummaryCache.remove(portfolioId);
+    }
 
     @Transactional(readOnly = true)
     public List<PortfolioDtos.PortfolioResponse> listPortfolios() {
@@ -74,6 +106,7 @@ public class PortfolioService {
         if (!portfolioRepository.existsById(id)) {
             throw notFound("Portfolio not found");
         }
+        invalidatePortfolioSummaryCache(id);
         portfolioRepository.deleteById(id);
     }
 
@@ -170,7 +203,8 @@ public class PortfolioService {
         h.setPurchaseDate(req.purchaseDate());
         h.setNotes(req.notes());
         h = holdingRepository.save(h);
-        
+        invalidatePortfolioSummaryCache(portfolioId);
+
         // 返回响应时包含市场价格
         return new PortfolioDtos.HoldingResponse(
                 h.getId(),
@@ -187,6 +221,7 @@ public class PortfolioService {
 
     public PortfolioDtos.HoldingResponse updateHolding(Long holdingId, PortfolioDtos.HoldingUpdateRequest req) {
         Holding h = holdingRepository.findById(holdingId).orElseThrow(() -> notFound("Holding not found"));
+        long portfolioId = h.getPortfolio().getId();
         if (req.assetType() != null) {
             h.setAssetType(req.assetType());
         }
@@ -209,21 +244,35 @@ public class PortfolioService {
             h.setNotes(req.notes());
         }
         h = holdingRepository.save(h);
+        invalidatePortfolioSummaryCache(portfolioId);
         return toHoldingResponse(h);
     }
 
     public void deleteHolding(Long holdingId) {
-        if (!holdingRepository.existsById(holdingId)) {
-            throw notFound("Holding not found");
-        }
-        holdingRepository.deleteById(holdingId);
+        Holding h = holdingRepository.findById(holdingId).orElseThrow(() -> notFound("Holding not found"));
+        long portfolioId = h.getPortfolio().getId();
+        holdingRepository.delete(h);
+        invalidatePortfolioSummaryCache(portfolioId);
     }
 
     @Transactional(readOnly = true)
     public PortfolioDtos.PortfolioSummaryResponse getSummary(Long portfolioId) {
-        Portfolio p = portfolioRepository.findById(portfolioId).orElseThrow(() -> notFound("Portfolio not found"));
-        List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
-        return buildSummary(p, holdings);
+        PortfolioSummaryCacheEntry cached = portfolioSummaryCache.get(portfolioId);
+        if (cached != null && System.currentTimeMillis() - cached.createdAtMs <= SUMMARY_CACHE_TTL_MS) {
+            return cached.summary;
+        }
+        synchronized (summaryStripeFor(portfolioId)) {
+            cached = portfolioSummaryCache.get(portfolioId);
+            if (cached != null && System.currentTimeMillis() - cached.createdAtMs <= SUMMARY_CACHE_TTL_MS) {
+                return cached.summary;
+            }
+            Portfolio p = portfolioRepository.findById(portfolioId).orElseThrow(() -> notFound("Portfolio not found"));
+            List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
+            PortfolioDtos.PortfolioSummaryResponse built = buildSummary(p, holdings);
+            portfolioSummaryCache.put(
+                    portfolioId, new PortfolioSummaryCacheEntry(built, System.currentTimeMillis()));
+            return built;
+        }
     }
 
     private PortfolioDtos.PortfolioSummaryResponse buildSummary(Portfolio p, List<Holding> holdings) {
@@ -263,6 +312,7 @@ public class PortfolioService {
                             h.getAssetType().name(),
                             h.getTicker(),
                             h.getQuantity(),
+                            h.getPurchaseDate(),
                             marketPrice,
                             marketValue,
                             costBasis,

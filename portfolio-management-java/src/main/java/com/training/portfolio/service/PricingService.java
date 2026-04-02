@@ -56,6 +56,20 @@ public class PricingService {
     private final ConcurrentHashMap<String, CacheEntry<Double>> priceCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CacheEntry<List<TimePrice>>> cachedDailySeriesCache = new ConcurrentHashMap<>();
 
+    /** Serialize fetches per stripe so parallel HTTP handlers do not each hit Massive for the same ticker. */
+    private static final int PRICE_STRIPE_COUNT = 256;
+    private final Object[] priceFetchStripes = new Object[PRICE_STRIPE_COUNT];
+
+    {
+        for (int i = 0; i < PRICE_STRIPE_COUNT; i++) {
+            priceFetchStripes[i] = new Object();
+        }
+    }
+
+    private Object priceStripeFor(String tickerUpper) {
+        return priceFetchStripes[Math.floorMod(tickerUpper.hashCode(), PRICE_STRIPE_COUNT)];
+    }
+
     private static boolean isFresh(long createdAtMs, long ttlMs) {
         return System.currentTimeMillis() - createdAtMs <= ttlMs;
     }
@@ -221,46 +235,50 @@ public class PricingService {
             System.out.println("=================================================================\n");
             return Optional.ofNullable(cached.value);
         }
-        
-        // 检测股票类型并选择合适的数据源
+
         StockType stockType = detectStockType(t);
         String[] providers = getProvidersForStockType(stockType);
-        
-        System.out.println("\n========== [PricingService.priceForHolding] ← 被 [" + caller + "] 调用 ==========");
-        System.out.println("[DEBUG] 股票：" + t);
-        System.out.println("[DEBUG] 检测到股票类型：" + stockType);
-        System.out.println("[DEBUG] 使用数据源优先级：" + String.join(" > ", providers));
-        System.out.println("[DEBUG] 缓存未命中，开始查询API");
-        System.out.println("=================================================================\n");
-        
-        // 按股票类型选择的数据源尝试
-        for (String provider : providers) {
-            System.out.println("[DEBUG] 尝试数据源 [" + provider.trim() + "]...");
-            
-            Optional<Double> price = switch (provider.trim()) {
-                case "massive" -> fetchMassivePreviousClose(t);
-                case "alpha-vantage" -> fetchAlphaVantagePreviousClose(t);
-                case "sina" -> fetchSinaPreviousClose(t);
-                case "cached" -> fetchCachedPrice(t);
-                default -> Optional.empty();
-            };
-            
-            if (price.isPresent()) {
-                System.out.println("\n[DEBUG] ✓ 数据源 [" + provider.trim() + "] 成功获取价格=" + price.get());
-                System.out.println("[DEBUG] 存入缓存，有效期5分钟");
-                System.out.println("========== [PricingService.priceForHolding] 完成 ==========\n");
-                // 将获取到的价格存入内存缓存
-                priceCache.put("cached:" + t, new CacheEntry<>(price.get(), System.currentTimeMillis()));
-                return price;
-            } else {
-                System.out.println("[DEBUG] ✗ 数据源 [" + provider.trim() + "] 未获取到价格，尝试下一个...");
+
+        synchronized (priceStripeFor(t)) {
+            cached = priceCache.get("cached:" + t);
+            if (cached != null && isFresh(cached.createdAtMs, PRICE_CACHE_TTL_MS)) {
+                return Optional.ofNullable(cached.value);
             }
+
+            System.out.println("\n========== [PricingService.priceForHolding] ← 被 [" + caller + "] 调用 ==========");
+            System.out.println("[DEBUG] 股票：" + t);
+            System.out.println("[DEBUG] 检测到股票类型：" + stockType);
+            System.out.println("[DEBUG] 使用数据源优先级：" + String.join(" > ", providers));
+            System.out.println("[DEBUG] 缓存未命中，单飞锁内查询外部API");
+            System.out.println("=================================================================\n");
+
+            for (String provider : providers) {
+                System.out.println("[DEBUG] 尝试数据源 [" + provider.trim() + "]...");
+
+                Optional<Double> price = switch (provider.trim()) {
+                    case "massive" -> fetchMassivePreviousClose(t);
+                    case "alpha-vantage" -> fetchAlphaVantagePreviousClose(t);
+                    case "sina" -> fetchSinaPreviousClose(t);
+                    case "cached" -> fetchCachedPrice(t);
+                    default -> Optional.empty();
+                };
+
+                if (price.isPresent()) {
+                    System.out.println("\n[DEBUG] ✓ 数据源 [" + provider.trim() + "] 成功获取价格=" + price.get());
+                    System.out.println("[DEBUG] 存入缓存，有效期5分钟");
+                    System.out.println("========== [PricingService.priceForHolding] 完成 ==========\n");
+                    priceCache.put("cached:" + t, new CacheEntry<>(price.get(), System.currentTimeMillis()));
+                    return price;
+                } else {
+                    System.out.println("[DEBUG] ✗ 数据源 [" + provider.trim() + "] 未获取到价格，尝试下一个...");
+                }
+            }
+
+            System.out.println("\n[DEBUG] ✗ 所有数据源都未能获取到价格");
+            System.out.println("========== [PricingService.priceForHolding] 失败 ==========\n");
+
+            return Optional.empty();
         }
-        
-        System.out.println("\n[DEBUG] ✗ 所有数据源都未能获取到价格");
-        System.out.println("========== [PricingService.priceForHolding] 失败 ==========\n");
-        
-        return Optional.empty();
     }
 
     /**
@@ -1028,49 +1046,74 @@ public class PricingService {
         return fetchCachedHistoricalPrice(t, date);
     }
     
+    // 缓存历史价格查询结果 (ticker:date -> price)
+    private final ConcurrentHashMap<String, CacheEntry<Double>> historicalPriceCache = new ConcurrentHashMap<>();
+    private static final long HISTORICAL_PRICE_CACHE_TTL_MS = 30 * 60 * 1000L; // 30分钟
+
     /**
      * 使用 Massive API 查询指定日期的历史价格
      * URL格式: /v1/open-close/{ticker}/{date}?adjusted=true&apiKey={apiKey}
+     * 带缓存机制，减少API调用次数
      */
     private Optional<Double> fetchMassiveHistoricalPrice(String ticker, LocalDate date) {
-        String apiKey = appProperties.getPricing().getMassiveApiKey();
-        String base = appProperties.getPricing().getMassiveBase();
-        
-        // URL格式: /v1/open-close/{ticker}/{date}
-        String url = base + "/open-close/" + ticker + "/" + date 
-                + "?adjusted=true&apiKey=" + apiKey;
-        
-        System.out.println("[DEBUG] Massive API URL: " + url);
-        
-        try {
-            String body = restClient.get()
-                    .uri(url)
-                    .header("accept", "application/json")
-                    .retrieve()
-                    .body(String.class);
-            
-            if (body == null || body.isBlank()) {
-                System.out.println("[DEBUG] Massive API 返回空响应");
-                return Optional.empty();
+        // Massive v1 `open-close` 对非交易日会返回 404。
+        // 为了让买入日基准在周末/节假日仍可用，这里向前回退到最近交易日。
+        int maxBackDays = 10;
+
+        for (int i = 0; i <= maxBackDays; i++) {
+            LocalDate queryDate = date.minusDays(i);
+            String cacheKey = ticker + ":" + date.toString();
+
+            // 检查缓存（按原始 date 缓存，保证“买入日基准”一致）
+            CacheEntry<Double> cached = historicalPriceCache.get(cacheKey);
+            if (cached != null && isFresh(cached.createdAtMs, HISTORICAL_PRICE_CACHE_TTL_MS)) {
+                return Optional.of(cached.value);
             }
-            
-            JsonNode root = objectMapper.readTree(body);
-            
-            // 解析 Massive API 响应
-            // 响应格式: {"symbol": "AAPL", "from": "2023-01-09", "open": 130.47, "high": 133.41, "low": 129.95, "close": 130.73, "volume": 70790813, "afterHours": 130.6, "preMarket": 129.98}
-            if (root.has("close")) {
-                double closePrice = root.get("close").asDouble();
-                String fromDate = root.has("from") ? root.get("from").asText() : date.toString();
-                System.out.println("[DEBUG] ✓ 从 Massive API 找到历史价格: " + closePrice + " (" + fromDate + ")");
-                System.out.println("================================================\n");
-                return Optional.of(closePrice);
+
+            String apiKey = appProperties.getPricing().getMassiveApiKey();
+            String base = appProperties.getPricing().getMassiveBase();
+
+            // URL格式: /v1/open-close/{ticker}/{date}
+            String url = base + "/open-close/" + ticker + "/" + queryDate
+                    + "?adjusted=true&apiKey=" + apiKey;
+
+            System.out.println("[DEBUG] Massive API URL: " + url);
+
+            try {
+                String body = restClient.get()
+                        .uri(url)
+                        .header("accept", "application/json")
+                        .retrieve()
+                        .body(String.class);
+
+                if (body == null || body.isBlank()) {
+                    continue;
+                }
+
+                JsonNode root = objectMapper.readTree(body);
+
+                if (root.has("close")) {
+                    double closePrice = root.get("close").asDouble();
+                    String fromDate = root.has("from") ? root.get("from").asText() : queryDate.toString();
+
+                    // 存入缓存：用“原始买入日 date”作为 key
+                    historicalPriceCache.put(cacheKey, new CacheEntry<>(closePrice, System.currentTimeMillis()));
+
+                    System.out.println("[DEBUG] ✓ 从 Massive API 找到历史价格: " + closePrice + " (" + fromDate + ")，已缓存30分钟");
+                    System.out.println("================================================\n");
+                    return Optional.of(closePrice);
+                }
+
+                System.out.println("[DEBUG] Massive API 响应中未找到 close 字段");
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                // 非交易日：继续向前回退
+                System.out.println("[DEBUG] Massive API 对该日期无数据（404），回退到前一交易日。尝试日期: " + queryDate);
+            } catch (Exception e) {
+                System.out.println("[DEBUG] Massive API 请求失败: " + e.getMessage());
+                break;
             }
-            
-            System.out.println("[DEBUG] Massive API 响应中未找到 close 字段");
-        } catch (Exception e) {
-            System.out.println("[DEBUG] Massive API 请求失败: " + e.getMessage());
         }
-        
+
         return Optional.empty();
     }
     
@@ -1088,22 +1131,36 @@ public class PricingService {
         List<TimePrice> series = fetchCachedDailyCloseSeries(ticker, daysBack);
         
         // 查找目标日期的价格
+        TimePrice candidate = null;
         for (TimePrice tp : series) {
             LocalDate priceDate = tp.day().atZone(ZoneOffset.UTC).toLocalDate();
-            if (priceDate.equals(date)) {
-                System.out.println("[DEBUG] ✓ 从缓存找到历史价格: " + tp.price() + " (" + date + ")");
-                System.out.println("===============================================\n");
-                return Optional.of(tp.price());
+            // 买入日基准：优先使用 <= date 的最近交易日
+            if ((priceDate.isEqual(date) || priceDate.isBefore(date))) {
+                candidate = tp;
+            } else {
+                // series 按天升序时，超过 date 后就可以停止
+                break;
             }
         }
-        
-        // 如果没找到精确日期，返回最近一天的价格
-        if (!series.isEmpty()) {
-            TimePrice latest = series.get(series.size() - 1);
-            LocalDate latestDate = latest.day().atZone(ZoneOffset.UTC).toLocalDate();
-            System.out.println("[DEBUG] ⚠ 未找到 " + date + " 的价格，使用最近日期 " + latestDate + " 的价格: " + latest.price());
+
+        if (candidate != null) {
+            LocalDate candidateDate = candidate.day().atZone(ZoneOffset.UTC).toLocalDate();
+            if (candidateDate.equals(date)) {
+                System.out.println("[DEBUG] ✓ 从缓存找到历史价格: " + candidate.price() + " (" + date + ")");
+            } else {
+                System.out.println("[DEBUG] ⚠ 未找到 " + date + " 的精确价格，使用最近日期 " + candidateDate + " 的价格: " + candidate.price());
+            }
             System.out.println("===============================================\n");
-            return Optional.of(latest.price());
+            return Optional.of(candidate.price());
+        }
+
+        // 如果缓存数据都比 date 更新（很少见），则返回第一个可用点
+        if (!series.isEmpty()) {
+            TimePrice first = series.get(0);
+            LocalDate firstDate = first.day().atZone(ZoneOffset.UTC).toLocalDate();
+            System.out.println("[DEBUG] ⚠ 缓存中没有 <= " + date + " 的数据，使用最早日期 " + firstDate + " 的价格: " + first.price());
+            System.out.println("===============================================\n");
+            return Optional.of(first.price());
         }
         
         System.out.println("[DEBUG] ✗ 未找到历史价格数据");
@@ -1138,9 +1195,14 @@ public class PricingService {
         return Optional.of(convertedPrice);
     }
 
+    // 缓存股票历史走势数据 (ticker:from:to -> List<TimePrice>)
+    private final ConcurrentHashMap<String, CacheEntry<List<TimePrice>>> historicalSeriesCache = new ConcurrentHashMap<>();
+    private static final long HISTORICAL_SERIES_CACHE_TTL_MS = 60 * 60 * 1000L; // 1小时
+
     /**
      * 获取股票历史价格数据（用于图表展示）
      * 使用 Massive API v2: /v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}
+     * 带缓存机制，减少API调用次数
      *
      * @param ticker 股票代码
      * @param from 开始日期
@@ -1149,6 +1211,19 @@ public class PricingService {
      */
     public List<TimePrice> fetchStockHistoricalSeries(String ticker, LocalDate from, LocalDate to) {
         String t = ticker.toUpperCase();
+        String cacheKey = String.format("%s:%s:%s", t, from.toString(), to.toString());
+        
+        // 检查缓存
+        CacheEntry<List<TimePrice>> cached = historicalSeriesCache.get(cacheKey);
+        if (cached != null && isFresh(cached.createdAtMs, HISTORICAL_SERIES_CACHE_TTL_MS)) {
+            System.out.println("\n========== [股票历史数据查询 - 缓存命中] ==========");
+            System.out.println("[DEBUG] 股票: " + t);
+            System.out.println("[DEBUG] 日期范围: " + from + " 至 " + to);
+            System.out.println("[DEBUG] ✓ 使用缓存数据，共 " + cached.value.size() + " 条");
+            System.out.println("=======================================================\n");
+            return cached.value;
+        }
+        
         String apiKey = appProperties.getPricing().getMassiveApiKey();
 
         // Massive API v2 格式: /v2/aggs/ticker/AAPL/range/1/day/2025-11-03/2025-11-28
@@ -1172,6 +1247,11 @@ public class PricingService {
 
             if (body == null || body.isBlank()) {
                 System.out.println("[DEBUG] ✗ Massive API 返回空响应");
+                // 429错误时尝试返回过期缓存
+                if (cached != null) {
+                    System.out.println("[DEBUG] ⚠ 返回过期缓存数据作为降级方案");
+                    return cached.value;
+                }
                 return List.of();
             }
 
@@ -1193,7 +1273,10 @@ public class PricingService {
                     }
                 }
 
-                System.out.println("[DEBUG] ✓ 获取到 " + series.size() + " 条历史数据");
+                // 存入缓存
+                historicalSeriesCache.put(cacheKey, new CacheEntry<>(series, System.currentTimeMillis()));
+                
+                System.out.println("[DEBUG] ✓ 获取到 " + series.size() + " 条历史数据，已缓存1小时");
                 System.out.println("=======================================================\n");
                 return series;
             } else {
@@ -1205,6 +1288,11 @@ public class PricingService {
         } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
             System.out.println("[DEBUG] ✗ Massive API 429 错误：请求频率超限");
             System.out.println("[DEBUG] 建议：请稍后再试，或使用其他数据源");
+            // 429错误时尝试返回过期缓存
+            if (cached != null) {
+                System.out.println("[DEBUG] ⚠ 返回过期缓存数据作为降级方案");
+                return cached.value;
+            }
         } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
             System.out.println("[DEBUG] ✗ Massive API 400 错误：请求参数错误");
             System.out.println("[DEBUG] 可能原因：日期范围无效或股票代码不存在");

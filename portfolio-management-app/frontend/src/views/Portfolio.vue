@@ -1,21 +1,21 @@
 <template>
   <div class="portfolio-page">
     <header class="page-header">
-      <h1>{{ t('portfolio.title') }}</h1>
-      <p class="subtitle">{{ t('portfolio.subtitle') }}</p>
+      <h1>Portfolio</h1>
+      <p class="subtitle">Manage your portfolios and holdings</p>
     </header>
 
     <div class="portfolio-content">
       <!-- 组合列表 -->
       <section class="card">
         <div class="card-header">
-          <h2>{{ t('portfolio.myPortfolios') }}</h2>
+          <h2>My Portfolios</h2>
           <button class="btn-primary" @click="showCreateModal = true">
-            {{ t('portfolio.newPortfolio') }}
+            New Portfolio
           </button>
         </div>
         
-        <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+        <div v-if="loading" class="loading">Loading...</div>
         
         <div v-else-if="portfolios.length" class="portfolio-list">
           <div 
@@ -33,7 +33,7 @@
           </div>
         </div>
         
-        <p v-else class="empty">{{ t('portfolio.noPortfolios') }}</p>
+        <p v-else class="empty">No portfolios yet</p>
       </section>
 
       <!-- 组合详情 -->
@@ -41,8 +41,8 @@
         <div class="card-header">
           <h2>{{ selectedPortfolio.name }}</h2>
           <div class="header-actions">
-            <button class="btn-secondary" @click="refreshData">{{ t('portfolio.refresh') }}</button>
-            <button class="btn-primary" @click="showAddHolding = true">{{ t('portfolio.addHolding') }}</button>
+            <button class="btn-secondary" @click="refreshData">Refresh</button>
+            <button class="btn-primary" @click="showAddHolding = true">Add Holding</button>
           </div>
         </div>
 
@@ -50,22 +50,22 @@
         <div v-if="summary" class="summary-section">
           <div class="summary-grid">
             <div class="summary-item">
-              <span class="label">{{ t('portfolio.totalCost') }}</span>
+              <span class="label">Total Cost</span>
               <span class="value">{{ fmtMoney(summary.totalCost) }}</span>
             </div>
             <div class="summary-item">
-              <span class="label">{{ t('portfolio.totalMarketValue') }}</span>
+              <span class="label">Market Value</span>
               <span class="value">{{ fmtMoney(summary.totalMarketValue) }}</span>
             </div>
             <div class="summary-item" :class="{ 'positive': summary.unrealizedPnl >= 0, 'negative': summary.unrealizedPnl < 0 }">
-              <span class="label">{{ t('portfolio.unrealizedPnl') }}</span>
+              <span class="label">Unrealized P&L</span>
               <span class="value">{{ fmtMoney(summary.unrealizedPnl) }}</span>
             </div>
           </div>
 
           <!-- 资产分布 -->
           <div class="allocation-section">
-            <h3>{{ t('portfolio.assetAllocation') }}</h3>
+            <h3>Asset Allocation</h3>
             <div class="allocation-bars">
               <div v-for="(pct, type) in summary.allocationPct" :key="type" class="alloc-item">
                 <span class="type">{{ formatAssetType(type) }}</span>
@@ -80,28 +80,30 @@
 
         <!-- 持仓列表 -->
         <div class="holdings-section">
-          <h3>{{ t('portfolio.holdingsDetail') }}</h3>
+          <h3>Holdings Detail</h3>
           <table v-if="summary?.holdings?.length" class="data-table">
             <thead>
               <tr>
-                <th>{{ t('portfolio.assetType') }}</th>
-                <th>{{ t('portfolio.ticker') }}</th>
-                <th>{{ t('portfolio.quantity') }}</th>
-                <th>{{ t('portfolio.costPrice') }}</th>
-                <th>{{ t('portfolio.marketPrice') }}</th>
-                <th>{{ t('portfolio.marketValue') }}</th>
-                <th>{{ t('portfolio.profitLoss') }}</th>
-                <th>{{ t('portfolio.action') }}</th>
+                <th>Type</th>
+                <th>Ticker</th>
+                <th>Quantity</th>
+                <th>Cost Price</th>
+                <th>Buy-in Date</th>
+                <th>Market Price</th>
+                <th>Market Value</th>
+                <th>Profit/Loss</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="h in summary.holdings" :key="h.holdingId" 
                   :class="{ 'clickable': h.ticker && h.assetType !== 'cash' }"
-                  @click="h.ticker && h.assetType !== 'cash' ? showStockHistory(h.ticker) : null">
+                  @click="h.ticker && h.assetType !== 'cash' ? showStockHistory(h.ticker, h.purchaseDate) : null">
                 <td>{{ formatAssetType(h.assetType) }}</td>
                 <td class="ticker-cell">{{ h.ticker || '—' }}</td>
                 <td>{{ h.quantity }}</td>
                 <td>{{ fmtMoney(h.costBasis / h.quantity) }}</td>
+                <td>{{ h.purchaseDate ? normalizeDateToYMD(h.purchaseDate) : '—' }}</td>
                 <td>{{ h.marketPrice ? fmtMoney(h.marketPrice) : '—' }}</td>
                 <td>{{ h.marketValue ? fmtMoney(h.marketValue) : '—' }}</td>
                 <td :class="{ 'positive': (h.unrealizedPnl || 0) >= 0, 'negative': (h.unrealizedPnl || 0) < 0 }">
@@ -114,23 +116,25 @@
               </tr>
             </tbody>
           </table>
-          <p v-else class="empty">{{ t('portfolio.noHoldings') }}</p>
+          <p v-else class="empty">No holdings yet</p>
         </div>
       </section>
 
       <section v-else class="card empty-card">
-        <p>{{ t('portfolio.selectPortfolio') }}</p>
+        <p>Select a portfolio to view details</p>
       </section>
+    </div>
 
-      <!-- 股票历史走势 -->
-      <section v-if="selectedStockTicker" class="card stock-history-card">
-        <div class="card-header">
-          <h2>{{ selectedStockTicker.toUpperCase() }} {{ t('portfolio.priceHistory') || '历史走势' }}</h2>
-          <button class="btn-icon close-btn" @click="closeStockHistory">✕</button>
+    <!-- 股票历史走势弹窗 -->
+    <div v-if="selectedStockTicker" class="modal-backdrop" @click.self="closeStockHistory">
+      <div class="modal chart-modal">
+        <div class="modal-header">
+          <h3>{{ selectedStockTicker.toUpperCase() }} &mdash; {{ tOr('portfolio.priceHistory', 'Price History') }}</h3>
+          <button class="close-btn" @click="closeStockHistory">&times;</button>
         </div>
-        
+
         <!-- 时间范围选择器 -->
-        <div class="time-selector">
+        <div class="time-selector modal-time-selector">
           <button 
             v-for="option in timeRangeOptions" 
             :key="option.days"
@@ -141,81 +145,194 @@
           </button>
         </div>
 
-        <!-- 股票走势图 -->
-        <div v-if="stockHistoryLoading" class="loading">
-          <div class="spinner"></div>
-          <span>{{ t('common.loading') }}</span>
+        <!-- 图表内容 -->
+        <div class="modal-chart-body">
+          <div v-if="stockHistoryLoading" class="loading">
+            <div class="spinner"></div>
+            <span>Loading...</span>
+          </div>
+          <div v-else-if="stockHistoryData?.length && stockHistoryData.length >= 2">
+            <div
+              class="chart-area chart-area--history"
+              ref="stockHistoryChartAreaRef"
+            >
+              <svg
+                ref="stockHistorySvgRef"
+                :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
+                preserveAspectRatio="xMidYMid meet"
+                class="price-history-svg"
+                @mousemove="onStockHistoryMouseMove"
+                @mouseleave="clearStockHistoryHover"
+              >
+                <defs>
+                  <linearGradient id="portfolio-stock-area-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" :stop-color="chartAccent" stop-opacity="0.38" />
+                    <stop offset="50%" :stop-color="chartAccent" stop-opacity="0.1" />
+                    <stop offset="100%" :stop-color="chartAccent" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <rect
+                  :x="padding.left"
+                  :y="padding.top"
+                  :width="chartWidth - padding.left - padding.right"
+                  :height="chartHeight - padding.top - padding.bottom"
+                  rx="12"
+                  fill="#f8fafc"
+                  stroke="#e2e8f0"
+                  stroke-width="1"
+                />
+                <line
+                  v-for="i in 6"
+                  :key="'gh' + i"
+                  :x1="padding.left + 1"
+                  :x2="chartWidth - padding.right - 1"
+                  :y1="chartGridY(i)"
+                  :y2="chartGridY(i)"
+                  stroke="#e2e8f0"
+                  stroke-width="1"
+                  stroke-dasharray="5 7"
+                  opacity="0.9"
+                />
+                <line
+                  v-for="i in 6"
+                  :key="'gv' + i"
+                  :x1="chartGridX(i)"
+                  :x2="chartGridX(i)"
+                  :y1="padding.top + 1"
+                  :y2="chartHeight - padding.bottom - 1"
+                  stroke="#e8ecf1"
+                  stroke-width="1"
+                  stroke-dasharray="4 8"
+                  opacity="0.65"
+                />
+                <path
+                  v-if="stockChartAreaPath"
+                  :d="stockChartAreaPath"
+                  fill="url(#portfolio-stock-area-gradient)"
+                />
+                <polyline
+                  v-if="stockChartPoints"
+                  :points="stockChartPoints"
+                  fill="none"
+                  :stroke="chartAccent"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="price-line-glow"
+                />
+                <circle
+                  v-for="(pt, idx) in chartLineEndpoints"
+                  :key="'ep' + idx"
+                  :cx="pt.x"
+                  :cy="pt.y"
+                  r="5.5"
+                  fill="white"
+                  :stroke="chartAccent"
+                  stroke-width="2.5"
+                />
+
+                <!-- Hover crosshair + point -->
+                <line
+                  v-if="hoveredChartPoint"
+                  :x1="hoveredChartPoint.x"
+                  :x2="hoveredChartPoint.x"
+                  :y1="padding.top"
+                  :y2="chartHeight - padding.bottom"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                  stroke-dasharray="4 6"
+                  opacity="0.95"
+                />
+                <line
+                  v-if="hoveredChartPoint"
+                  :x1="padding.left"
+                  :x2="chartWidth - padding.right"
+                  :y1="hoveredChartPoint.y"
+                  :y2="hoveredChartPoint.y"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                  stroke-dasharray="3 7"
+                  opacity="0.5"
+                />
+                <circle
+                  v-if="hoveredChartPoint"
+                  :cx="hoveredChartPoint.x"
+                  :cy="hoveredChartPoint.y"
+                  r="7"
+                  fill="white"
+                  :stroke="chartAccent"
+                  stroke-width="2.5"
+                />
+              </svg>
+
+              <!-- Tooltip -->
+              <div
+                v-if="hoveredChartPoint"
+                class="chart-tooltip"
+                :style="{ left: stockHistoryTooltipPos.left + 'px', top: stockHistoryTooltipPos.top + 'px' }"
+              >
+                <div class="tooltip-date">{{ hoveredChartPoint.date }}</div>
+                <div class="tooltip-price">{{ fmtMoney(hoveredChartPoint.value) }}</div>
+                <div class="tooltip-sub">
+                  <span :class="hoveredReturnPercent >= 0 ? 'positive' : 'negative'">
+                    {{ fmtPercent(hoveredReturnPercent) }}
+                  </span>
+                  <span class="tooltip-sub-label">
+                    {{ selectedStockBuyInDate ? `vs buy (${selectedStockBuyInDate})` : 'Return' }}
+                  </span>
+                </div>
+                <div v-if="selectedStockBuyInDate" class="tooltip-buy">
+                  Buy price:
+                  <span class="tooltip-buy-value">
+                    {{ typeof stockBuyInPrice === 'number' ? fmtMoney(stockBuyInPrice) : '—' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div class="chart-info chart-info-row">
+              <div class="info-item">
+                <span>{{ tOr('analytics.highest', 'High') }}:</span>
+                <span class="positive">{{ fmtMoney(stockMaxValue) }}</span>
+              </div>
+              <div class="info-item">
+                <span>{{ tOr('analytics.lowest', 'Low') }}:</span>
+                <span class="negative">{{ fmtMoney(stockMinValue) }}</span>
+              </div>
+              <div class="info-item">
+                <span>{{ tOr('analytics.average', 'Avg') }}:</span>
+                <span>{{ fmtMoney(stockAvgValue) }}</span>
+              </div>
+              <div class="info-item">
+                <span>{{ tOr('analytics.change', 'Change') }}:</span>
+                <span :class="chartReturnPercent >= 0 ? 'positive' : 'negative'">
+                  {{ fmtPercent(chartReturnPercent) }}
+                </span>
+              </div>
+              <div class="info-item">
+                <span>Data points:</span>
+                <span>{{ stockHistoryData.length }}</span>
+              </div>
+            </div>
+          </div>
+          <p v-else class="empty">{{ stockHistoryError || tOr('analytics.noStockData', 'No data available') }}</p>
         </div>
-        <div v-else-if="stockHistoryData?.length && stockHistoryData.length >= 2" class="chart-container">
-          <div class="chart-header">
-            <span class="data-points">{{ stockHistoryData.length }} 个数据点</span>
-          </div>
-          <div class="chart-area">
-            <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none">
-              <!-- 网格线 -->
-              <line v-for="i in 5" :key="'h'+i"
-                :x1="0" :y1="chartHeight * i / 5" 
-                :x2="chartWidth" :y2="chartHeight * i / 5"
-                stroke="#f3f4f6" stroke-width="1"
-              />
-              <!-- 折线 -->
-              <polyline
-                v-if="stockChartPoints"
-                :points="stockChartPoints"
-                fill="none"
-                stroke="#4f46e5"
-                stroke-width="2"
-              />
-              <!-- 数据点 -->
-              <circle
-                v-for="(point, idx) in stockChartPointsArray"
-                :key="idx"
-                :cx="point.x"
-                :cy="point.y"
-                r="3"
-                fill="#4f46e5"
-              />
-            </svg>
-          </div>
-          <div class="chart-info">
-            <div class="info-item">
-              <span>{{ t('analytics.highest') }}:</span>
-              <span class="positive">{{ fmtMoney(stockMaxValue) }}</span>
-            </div>
-            <div class="info-item">
-              <span>{{ t('analytics.lowest') }}:</span>
-              <span class="negative">{{ fmtMoney(stockMinValue) }}</span>
-            </div>
-            <div class="info-item">
-              <span>{{ t('analytics.average') }}:</span>
-              <span>{{ fmtMoney(stockAvgValue) }}</span>
-            </div>
-            <div class="info-item">
-              <span>{{ t('analytics.change') || '涨跌幅' }}:</span>
-              <span :class="stockChangePercent >= 0 ? 'positive' : 'negative'">
-                {{ fmtPercent(stockChangePercent) }}
-              </span>
-            </div>
-          </div>
-        </div>
-        <p v-else class="empty">{{ stockHistoryError || t('analytics.noStockData') || '暂无数据' }}</p>
-      </section>
+      </div>
     </div>
 
     <!-- 新建组合弹窗 -->
     <div v-if="showCreateModal" class="modal-backdrop" @click.self="showCreateModal = false">
       <div class="modal">
-        <h3>{{ t('portfolio.createNew') }}</h3>
+        <h3>Create New Portfolio</h3>
         <div class="form-group">
-          <label>{{ t('portfolio.name') }}</label>
-          <input v-model="newPortfolio.name" :placeholder="t('portfolio.placeholder.portfolioName')" />
+          <label>Name</label>
+          <input v-model="newPortfolio.name" placeholder="Portfolio name" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.description') }}</label>
-          <input v-model="newPortfolio.description" :placeholder="t('portfolio.placeholder.description')" />
+          <label>Description</label>
+          <input v-model="newPortfolio.description" placeholder="Description (optional)" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.baseCurrency') }}</label>
+          <label>Base Currency</label>
           <select v-model="newPortfolio.baseCurrency">
             <option value="USD">USD</option>
             <option value="CNY">CNY</option>
@@ -223,8 +340,8 @@
           </select>
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" @click="createPortfolio">{{ t('common.create') }}</button>
-          <button class="btn-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
+          <button class="btn-primary" @click="createPortfolio">Create</button>
+          <button class="btn-secondary" @click="showCreateModal = false">Cancel</button>
         </div>
       </div>
     </div>
@@ -232,39 +349,39 @@
     <!-- 添加/编辑持仓弹窗 -->
     <div v-if="showAddHolding" class="modal-backdrop" @click.self="closeHoldingModal">
       <div class="modal">
-        <h3>{{ editingHolding ? t('portfolio.editHoldingTitle') : t('portfolio.addHoldingTitle') }}</h3>
+        <h3>{{ editingHolding ? 'Edit Holding' : 'Add Holding' }}</h3>
         <div class="form-group">
-          <label>{{ t('portfolio.assetType') }}</label>
+          <label>Asset Type</label>
           <select v-model="holdingForm.assetType">
-            <option value="stock">{{ t('assetType.stock') }}</option>
-            <option value="bond">{{ t('assetType.bond') }}</option>
-            <option value="fund">{{ t('assetType.fund') }}</option>
-            <option value="cash">{{ t('assetType.cash') }}</option>
+            <option value="stock">Stock</option>
+            <option value="bond">Bond</option>
+            <option value="fund">Fund</option>
+            <option value="cash">Cash</option>
           </select>
         </div>
         <div class="form-group" v-if="holdingForm.assetType !== 'cash'">
-          <label>{{ t('portfolio.ticker') }}</label>
-          <input v-model="holdingForm.ticker" @change="onTickerInput" :placeholder="t('portfolio.placeholder.ticker')" />
+          <label>Stock Code</label>
+          <input v-model="holdingForm.ticker" @change="onTickerInput" placeholder="e.g. AAPL" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.name') }} ({{ t('common.optional') }})</label>
-          <input v-model="holdingForm.name" :placeholder="t('portfolio.placeholder.name')" />
+          <label>Asset Name (Optional)</label>
+          <input v-model="holdingForm.name" placeholder="Asset name" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.quantity') }}</label>
+          <label>Quantity</label>
           <input v-model.number="holdingForm.quantity" type="number" step="0.01" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.purchaseDate') }}</label>
+          <label>Buy-in Date</label>
           <input v-model="holdingForm.purchaseDate" type="date" @change="onPurchaseDateChange" />
         </div>
         <div class="form-group">
-          <label>{{ t('portfolio.averageCost') }} <small v-if="holdingForm.purchaseDate && !holdingForm.averageCost" style="color: #666;">({{ t('portfolio.autoFill') }})</small></label>
-          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" :placeholder="t('portfolio.autoFill')" />
+          <label>Average Cost <small v-if="holdingForm.purchaseDate && !holdingForm.averageCost" style="color: #666;">(Auto-fill)</small></label>
+          <input v-model.number="holdingForm.averageCost" type="number" step="0.01" placeholder="Auto-fill" />
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" @click="saveHolding">{{ t('common.save') }}</button>
-          <button class="btn-secondary" @click="closeHoldingModal">{{ t('common.cancel') }}</button>
+          <button class="btn-primary" @click="saveHolding">Save</button>
+          <button class="btn-secondary" @click="closeHoldingModal">Cancel</button>
         </div>
       </div>
     </div>
@@ -286,10 +403,15 @@ const summary = ref(null);
 
 // 股票历史走势相关
 const selectedStockTicker = ref('');
+const selectedStockBuyInDate = ref(null); // 用于计算“相对买入日”的收益率
 const selectedStockDays = ref(30);
 const stockHistoryData = ref([]); // 当前显示的数据（根据选择的时间范围过滤）
 const stockHistoryLoading = ref(false);
 const stockHistoryError = ref('');
+
+const stockBuyInPrice = ref(null); // 买入当日价格（用于计算收益率）
+const stockBuyInPriceLoading = ref(false);
+const stockBuyInPriceError = ref('');
 
 // 缓存一整年的数据，避免重复API调用
 const stockHistoryCache = ref({
@@ -306,9 +428,19 @@ const timeRangeOptions = [
 ];
 
 // 图表配置
-const chartWidth = 800;
-const chartHeight = 300;
-const padding = { top: 20, right: 20, bottom: 30, left: 60 };
+const chartWidth = 1400;
+const chartHeight = 480;
+const padding = { top: 40, right: 50, bottom: 60, left: 100 };
+
+function chartGridY(i) {
+  const plotH = chartHeight - padding.top - padding.bottom;
+  return padding.top + (plotH * (i - 1)) / 5;
+}
+
+function chartGridX(i) {
+  const plotW = chartWidth - padding.left - padding.right;
+  return padding.left + (plotW * (i - 1)) / 5;
+}
 
 // 弹窗状态
 const showCreateModal = ref(false);
@@ -342,6 +474,11 @@ function fmtMoney(v) {
 function fmtPercent(v) {
   if (v == null || Number.isNaN(Number(v))) return '—';
   return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+
+function tOr(key, fallback) {
+  const v = t(key);
+  return v === key ? fallback : v;
 }
 
 function formatAssetType(type) {
@@ -578,17 +715,56 @@ onMounted(() => {
 // ========== 股票历史走势功能 ==========
 
 // 显示股票历史走势
-async function showStockHistory(ticker) {
+function normalizeDateToYMD(d) {
+  if (!d) return '';
+  if (d instanceof Date) {
+    return d.toISOString().split('T')[0];
+  }
+  if (typeof d === 'string') {
+    // 处理 ISO datetime 字符串（如 2024-01-15T00:00:00Z）
+    return d.includes('T') ? d.split('T')[0] : d;
+  }
+  return '';
+}
+
+async function showStockHistory(ticker, buyInDate) {
   selectedStockTicker.value = ticker;
+  selectedStockBuyInDate.value = normalizeDateToYMD(buyInDate) || null;
   selectedStockDays.value = 30; // 默认30天
+
+  stockBuyInPriceError.value = '';
+  stockBuyInPrice.value = null;
+  stockBuyInPriceLoading.value = false;
+
+  // 先把图表数据加载出来（避免 tooltip 等待影响图表显示）
   await loadStockHistory(true); // true = 强制刷新，获取完整一年数据
+
+  // 再加载买入日价格，用于计算“相对买入日”的收益率
+  const bDate = selectedStockBuyInDate.value;
+  if (!bDate) return;
+
+  try {
+    stockBuyInPriceLoading.value = true;
+    const result = await api.getHistoricalPrice(selectedStockTicker.value, bDate);
+    if (result && result.found && typeof result.price === 'number') {
+      stockBuyInPrice.value = result.price;
+    }
+  } catch (e) {
+    stockBuyInPriceError.value = e.message || 'Failed to load buy-in price';
+  } finally {
+    stockBuyInPriceLoading.value = false;
+  }
 }
 
 // 关闭股票历史走势
 function closeStockHistory() {
   selectedStockTicker.value = '';
+  selectedStockBuyInDate.value = null;
   stockHistoryData.value = [];
   stockHistoryError.value = '';
+  stockBuyInPrice.value = null;
+  stockBuyInPriceError.value = '';
+  stockBuyInPriceLoading.value = false;
   // 清空缓存
   stockHistoryCache.value = {
     ticker: '',
@@ -738,6 +914,109 @@ const stockChangePercent = computed(() => {
   const last = stockHistoryData.value[stockHistoryData.value.length - 1].value;
   return ((last - first) / first) * 100;
 });
+
+// 当前收益率（基于买入日价格 vs 当前图表最后一天价格）
+const chartReturnPercent = computed(() => {
+  if (typeof stockBuyInPrice.value === 'number' && stockBuyInPrice.value !== 0) {
+    const last = stockHistoryData.value?.[stockHistoryData.value.length - 1]?.value;
+    if (typeof last === 'number') {
+      return ((last - stockBuyInPrice.value) / stockBuyInPrice.value) * 100;
+    }
+  }
+  // fallback：买入日价格还没加载/不可用时，用当前时间窗口起点做对比
+  return stockChangePercent.value;
+});
+
+const chartAccent = computed(() => {
+  const p = chartReturnPercent.value;
+  if (p > 0.15) return '#0d9488';
+  if (p < -0.15) return '#e11d48';
+  return '#6366f1';
+});
+
+const stockChartAreaPath = computed(() => {
+  const pts = stockChartPointsArray.value;
+  if (pts.length < 2) return '';
+  const baseY = chartHeight - padding.bottom;
+  const parts = [`M ${pts[0].x} ${baseY}`];
+  for (const p of pts) {
+    parts.push(`L ${p.x} ${p.y}`);
+  }
+  parts.push(`L ${pts[pts.length - 1].x} ${baseY} Z`);
+  return parts.join(' ');
+});
+
+const chartLineEndpoints = computed(() => {
+  const pts = stockChartPointsArray.value;
+  if (pts.length < 2) return [];
+  return [pts[0], pts[pts.length - 1]];
+});
+
+// ===== Hover interaction for stock history chart =====
+const stockHistorySvgRef = ref(null);
+const stockHistoryChartAreaRef = ref(null);
+const stockHistoryHoverIndex = ref(null);
+const stockHistoryTooltipPos = ref({ left: 12, top: 12 });
+
+const hoveredChartPoint = computed(() => {
+  if (stockHistoryHoverIndex.value === null) return null;
+  const idx = stockHistoryHoverIndex.value;
+  const pt = stockChartPointsArray.value[idx];
+  const meta = stockHistoryData.value[idx];
+  if (!pt || !meta) return null;
+  return { ...pt, date: meta.date, value: meta.value, index: idx };
+});
+
+const hoveredReturnPercent = computed(() => {
+  const hc = hoveredChartPoint.value;
+  if (!hc) return 0;
+  const base = stockBuyInPrice.value;
+  if (typeof base === 'number' && base !== 0) {
+    return ((hc.value - base) / base) * 100;
+  }
+
+  // fallback：如果买入日价格没能获取到，则用当前时间范围的起点做对比
+  const first = stockHistoryData.value?.[0]?.value ?? 0;
+  if (!first || first === 0) return 0;
+  return ((hc.value - first) / first) * 100;
+});
+
+function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max);
+}
+
+function onStockHistoryMouseMove(e) {
+  if (!stockHistorySvgRef.value || !stockHistoryChartAreaRef.value) return;
+  if (!stockHistoryData.value?.length || stockHistoryData.value.length < 2) return;
+
+  const svgRect = stockHistorySvgRef.value.getBoundingClientRect();
+  const areaRect = stockHistoryChartAreaRef.value.getBoundingClientRect();
+
+  const xInSvg = e.clientX - svgRect.left;
+  const xRatio = clamp(xInSvg / svgRect.width, 0, 1);
+  const xInViewBox = xRatio * chartWidth;
+
+  const plotW = chartWidth - padding.left - padding.right;
+  const t = clamp((xInViewBox - padding.left) / plotW, 0, 1);
+  const len = stockHistoryData.value.length;
+  const idx = Math.round(t * (len - 1));
+  stockHistoryHoverIndex.value = clamp(idx, 0, len - 1);
+
+  // Tooltip position relative to chart area
+  const tooltipWidth = 220;
+  const tooltipHeight = 74;
+  const rawLeft = e.clientX - areaRect.left + 12;
+  const rawTop = e.clientY - areaRect.top - 12;
+
+  stockHistoryTooltipPos.value = {
+    left: clamp(rawLeft, 12, areaRect.width - tooltipWidth - 12),
+    top: clamp(rawTop, 12, areaRect.height - tooltipHeight - 12),
+  };
+}
+
+function clearStockHistoryHover() {
+  stockHistoryHoverIndex.value = null;
+}
 </script>
 
 <style scoped>
@@ -1054,6 +1333,168 @@ const stockChangePercent = computed(() => {
 .stock-history-card {
   grid-column: 1 / -1;
   margin-top: 1rem;
+}
+
+.modal.chart-modal {
+  max-width: min(1280px, 98vw);
+  width: 96%;
+  padding: 0;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+  border-radius: 18px;
+}
+
+.modal.chart-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin: 0;
+}
+
+.modal.chart-modal .modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.modal.chart-modal .modal-time-selector {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  justify-content: center;
+  margin-bottom: 0;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.modal.chart-modal .modal-time-selector button {
+  border-radius: 999px;
+  padding: 0.45rem 1.15rem;
+  font-weight: 500;
+  border-color: #e5e7eb;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal.chart-modal .modal-time-selector button.active {
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+
+.modal.chart-modal .modal-chart-body {
+  padding: 1.5rem 1.75rem 2rem;
+  min-height: 520px;
+  background: #ffffff;
+}
+
+.chart-area.chart-area--history {
+  flex: none;
+  height: min(520px, 62vh);
+  min-height: 340px;
+  margin-bottom: 1.25rem;
+  border-radius: 14px;
+  padding: 0.35rem;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 55%, #eef2f7 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  position: relative;
+}
+
+.price-history-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  min-width: 160px;
+  max-width: 220px;
+  background: rgba(15, 23, 42, 0.96);
+  color: white;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 18px 40px -18px rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.tooltip-date {
+  font-size: 0.75rem;
+  color: rgba(226, 232, 240, 0.9);
+  margin-bottom: 6px;
+}
+
+.tooltip-price {
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  margin-bottom: 6px;
+}
+
+.tooltip-sub {
+  font-size: 0.85rem;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.tooltip-sub-label {
+  font-size: 0.75rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.tooltip-buy {
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.tooltip-buy-value {
+  font-weight: 700;
+  margin-left: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.price-line-glow {
+  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.12));
+}
+
+.modal-chart-body .chart-info-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.modal-chart-body .chart-info-row .info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  min-width: 100px;
+  border: 1px solid #eef2f7;
+}
+
+.modal-chart-body .chart-info-row .info-item span:first-child {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.modal-chart-body .chart-info-row .info-item span:last-child {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+@media (max-width: 900px) {
+  .modal-chart-body .chart-info-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .close-btn {
