@@ -267,7 +267,14 @@ export const messages = {
       editHoldingTitle: 'Edit Holding',
       purchaseDate: 'Purchase Date',
       averageCost: 'Average Cost',
-      autoFill: 'Will auto-fill with closing price on purchase date'
+      autoFill: 'Will auto-fill with closing price on purchase date',
+      refresh: 'Refresh',
+      edit: 'Edit',
+      delete: 'Delete',
+      placeholder: {
+        ticker: 'Ticker (e.g. AAPL)',
+        name: 'Asset name'
+      }
     },
     
     // Market

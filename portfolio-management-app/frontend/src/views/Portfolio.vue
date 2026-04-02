@@ -41,7 +41,7 @@
         <div class="card-header">
           <h2>{{ selectedPortfolio.name }}</h2>
           <div class="header-actions">
-            <button class="btn-secondary" @click="refreshData">Refresh</button>
+            <button class="btn-secondary" @click="refreshData">{{ tOr('portfolio.refresh', 'Refresh') }}</button>
             <button class="btn-primary" @click="showAddHolding = true">Add Holding</button>
           </div>
         </div>
@@ -360,12 +360,21 @@
           </select>
         </div>
         <div class="form-group" v-if="holdingForm.assetType !== 'cash'">
-          <label>Stock Code</label>
-          <input v-model="holdingForm.ticker" @change="onTickerInput" placeholder="e.g. AAPL" />
+          <label>{{ tOr('portfolio.ticker', 'Ticker') }}</label>
+          <input
+            v-model="holdingForm.ticker"
+            @change="onTickerInput"
+            :placeholder="tOr('portfolio.placeholder.ticker', 'e.g. AAPL')"
+          />
         </div>
         <div class="form-group">
-          <label>Asset Name (Optional)</label>
-          <input v-model="holdingForm.name" placeholder="Asset name" />
+          <label>
+            {{ tOr('portfolio.name', 'Name') }} <span class="optional">({{ tOr('common.optional', 'Optional') }})</span>
+          </label>
+          <input
+            v-model="holdingForm.name"
+            :placeholder="tOr('portfolio.placeholder.name', 'Asset name')"
+          />
         </div>
         <div class="form-group">
           <label>Quantity</label>
