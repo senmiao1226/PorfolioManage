@@ -208,9 +208,8 @@ public class MarketController {
             @RequestParam(defaultValue = "30") int days) {
         try {
             // 计算日期范围：结束日期为今天的前两天（确保有收盘数据）
-            // 使用固定参考日期 2025-03-31 作为基准，避免系统时间错误导致的问题
-            LocalDate referenceDate = LocalDate.of(2025, 3, 31);
-            LocalDate to = referenceDate.minusDays(2);
+            // 使用当前系统日期，避免年份固定导致历史窗口滞后（例如 2026 年仍查询 2024-2025）
+            LocalDate to = LocalDate.now().minusDays(2);
             LocalDate from = to.minusDays(days);
 
             // 限制最大范围
