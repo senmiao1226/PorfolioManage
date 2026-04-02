@@ -2,6 +2,7 @@ package com.training.portfolio.service;
 
 import com.training.portfolio.domain.AssetType;
 import com.training.portfolio.domain.Holding;
+import com.training.portfolio.domain.Portfolio;
 import com.training.portfolio.dto.MarketDtos;
 import com.training.portfolio.dto.MarketDtos.*;
 import com.training.portfolio.repo.HoldingRepository;
@@ -125,19 +126,51 @@ public class MarketService {
      * @return 全局持仓行情列表
      */
     public List<MarketPriceWithHoldingDto> getAllHoldingsMarketData() {
-        // 获取所有持仓
-        List<Holding> allHoldings = holdingRepository.findAll();
+        System.out.println("\n========== [getAllHoldingsMarketData] 开始 ==========");
+        
+        // 获取所有持仓（使用 fetch join 避免懒加载问题）
+        List<Holding> allHoldings = holdingRepository.findAllWithPortfolio();
+        
+        System.out.println("[DEBUG] 从数据库获取的总持仓记录数：" + allHoldings.size());
+        
+        if (allHoldings.isEmpty()) {
+            System.out.println("[DEBUG] 没有任何持仓记录，返回空列表");
+            return List.of();
+        }
+        
+        // 打印所有持仓的详细信息
+        System.out.println("\n[DEBUG] 所有持仓详情:");
+        for (Holding h : allHoldings) {
+            System.out.println("  - Ticker: " + h.getTicker() + 
+                             ", Portfolio ID: " + h.getPortfolio().getId() +
+                             ", Portfolio Name: " + h.getPortfolio().getName() +
+                             ", Quantity: " + h.getQuantity() +
+                             ", AssetType: " + h.getAssetType());
+        }
 
         // 全局按股票代码分组
         Map<String, List<Holding>> globalHoldings = allHoldings.stream()
                 .filter(h -> h.getAssetType() != AssetType.cash)
                 .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
                 .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
+        
+        System.out.println("\n[DEBUG] 去重后的股票数量：" + globalHoldings.size());
+        System.out.println("[DEBUG] 股票列表：" + globalHoldings.keySet());
 
-        return globalHoldings.entrySet().stream()
-                .map(entry -> buildMarketDataWithHolding(entry.getKey(), entry.getValue()))
+        List<MarketPriceWithHoldingDto> result = globalHoldings.entrySet().stream()
+                .map(entry -> {
+                    System.out.println("\n[DEBUG] 处理股票：" + entry.getKey() + 
+                                     ", 持仓记录数=" + entry.getValue().size());
+                    return buildMarketDataWithHolding(entry.getKey(), entry.getValue());
+                })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+        
+        System.out.println("\n[DEBUG] 最终返回的记录数：" + result.size());
+        System.out.println("[DEBUG] 返回的股票列表：" + result.stream().map(MarketPriceWithHoldingDto::ticker).toList());
+        System.out.println("========== [getAllHoldingsMarketData] 完成 ==========\n");
+        
+        return result;
     }
 
     /**
@@ -302,6 +335,143 @@ public class MarketService {
                 .collect(Collectors.toList());
         return new MarketDtos.MarketMoversBundleDto(gainers, losers);
     }
+    
+    /**
+     * 计算全局涨跌榜（汇总所有组合的持仓）
+     */
+    public MarketDtos.MarketMoversBundleDto getGlobalMarketMoversBundle(int topN) {
+        System.out.println("\n[MarketService.getGlobalMarketMoversBundle] 开始 | topN=" + topN);
+        
+        // 获取所有持仓
+        List<Holding> allHoldings = holdingRepository.findAllWithPortfolio();
+        System.out.println("[DEBUG] 总持仓记录数：" + allHoldings.size());
+        
+        // 按股票代码分组（全局去重）
+        Map<String, List<Holding>> globalHoldings = allHoldings.stream()
+                .filter(h -> h.getAssetType() != AssetType.cash)
+                .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
+                .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
+        
+        System.out.println("[DEBUG] 去重后的股票数量：" + globalHoldings.size());
+        
+        // 计算每只股票的盈亏
+        List<MarketDtos.MarketMoverDto> allMovers = globalHoldings.entrySet().stream()
+                .map(entry -> computeGlobalMover(entry.getKey(), entry.getValue()))
+                .filter(Objects::nonNull)
+                .filter(m -> m.unrealizedPnl() != null)
+                .collect(Collectors.toList());
+        
+        System.out.println("[DEBUG] 有盈亏数据的股票数量：" + allMovers.size());
+        
+        // 分别计算盈利榜和亏损榜
+        List<MarketDtos.MarketMoverDto> gainers = allMovers.stream()
+                .sorted((a, b) -> {
+                    double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
+                    double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
+                    return Double.compare(pnlB, pnlA);
+                })
+                .limit(topN)
+                .collect(Collectors.toList());
+        
+        List<MarketDtos.MarketMoverDto> losers = allMovers.stream()
+                .sorted((a, b) -> {
+                    double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
+                    double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
+                    return Double.compare(pnlA, pnlB);
+                })
+                .limit(topN)
+                .collect(Collectors.toList());
+        
+        System.out.println("[DEBUG] 盈利榜记录数：" + gainers.size());
+        System.out.println("[DEBUG] 亏损榜记录数：" + losers.size());
+        System.out.println("[MarketService.getGlobalMarketMoversBundle] 完成");
+        
+        return new MarketDtos.MarketMoversBundleDto(gainers, losers);
+    }
+    
+    /**
+     * 计算单只股票的全局盈亏（汇总所有组合中的该股票持仓）
+     */
+    private MarketDtos.MarketMoverDto computeGlobalMover(String ticker, List<Holding> holdings) {
+        if (holdings.isEmpty()) {
+            return null;
+        }
+        
+        // 汇总所有组合中的该股票持仓
+        double totalQuantity = holdings.stream()
+                .mapToDouble(Holding::getQuantity)
+                .sum();
+        
+        // 计算总成本（需要按组合本币统一）
+        // 简化处理：假设所有组合使用相同货币，或使用第一持仓的组合货币
+        String baseCurrency = holdings.get(0).getPortfolio().getBaseCurrency();
+        double totalCost = holdings.stream()
+                .mapToDouble(h -> h.getQuantity() * h.getAverageCost())
+                .sum();
+        
+        // 获取股票名称
+        String name = holdings.stream()
+                .map(Holding::getName)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(ticker);
+        
+        // 获取当前价格（带货币转换）
+        Optional<Double> priceOpt = pricingService.priceForHoldingWithCurrency(AssetType.stock, ticker, baseCurrency);
+        Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, ticker);
+        
+        if (priceOpt.isEmpty()) {
+            System.out.println("[DEBUG] " + ticker + " 未获取到当前价格，跳过");
+            return null;
+        }
+        
+        Double currentPrice = priceOpt.get();
+        Double totalValue = currentPrice * totalQuantity;
+        
+        // 计算未实现盈亏
+        Double unrealizedPnl = totalValue - totalCost;
+        Double unrealizedPnlPercent = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0.0;
+        
+        // 计算当日涨跌
+        Double priceChange = 0.0;
+        Double priceChangePercent = 0.0;
+        if (prevCloseOpt.isPresent() && prevCloseOpt.get() > 0) {
+            Double previousClose = prevCloseOpt.get();
+            
+            // 货币转换
+            Double convertedPrevClose = previousClose;
+            if (!"USD".equalsIgnoreCase(baseCurrency)) {
+                String sourceCurrency = pricingService.detectSourceCurrency(ticker);
+                if (!sourceCurrency.equalsIgnoreCase(baseCurrency)) {
+                    convertedPrevClose = pricingService.convertCurrency(previousClose, sourceCurrency, baseCurrency);
+                }
+            }
+            
+            priceChange = currentPrice - convertedPrevClose;
+            priceChangePercent = (priceChange / convertedPrevClose) * 100;
+        }
+        
+        String trend = unrealizedPnl >= 0 ? "UP" : "DOWN";
+        
+        System.out.println("[DEBUG] " + ticker + " | 总持仓=" + round2(totalQuantity) + 
+                         ", 总成本=" + round2(totalCost) + 
+                         ", 总市值=" + round2(totalValue) + 
+                         ", 盈亏=" + round2(unrealizedPnl) + " (" + round2(unrealizedPnlPercent) + "%)");
+        
+        return new MarketDtos.MarketMoverDto(
+                ticker,
+                name,
+                currentPrice,
+                round2(priceChange),
+                round2(priceChangePercent),
+                trend,
+                round2(unrealizedPnl),
+                round2(unrealizedPnlPercent),
+                round2(totalCost),
+                round2(totalValue),
+                totalQuantity
+        );
+    }
 
     public List<MarketDtos.MarketMoverDto> getMarketMovers(Long portfolioId, int topN, boolean gainers) {
         System.out.println("\n[MarketService.getMarketMovers] 开始 | portfolioId=" + portfolioId + ", gainers=" + gainers);
@@ -328,6 +498,12 @@ public class MarketService {
     private List<MarketDtos.MarketMoverDto> computeAllMoversForPortfolio(Long portfolioId) {
         List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
         System.out.println("[DEBUG] 获取到持仓记录数：" + holdings.size());
+        
+        // 获取组合的基础货币（用于货币转换）
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new RuntimeException("Portfolio not found: " + portfolioId));
+        String baseCurrency = portfolio.getBaseCurrency();
+        System.out.println("[DEBUG] 组合基础货币：" + baseCurrency);
 
         Map<String, List<Holding>> holdingsByTicker = holdings.stream()
                 .filter(h -> h.getAssetType() != AssetType.cash)
@@ -337,7 +513,7 @@ public class MarketService {
         System.out.println("[DEBUG] 去重后的股票数量：" + holdingsByTicker.size());
 
         return holdingsByTicker.entrySet().stream()
-                .map(entry -> calculateUnrealizedPnl(entry.getKey(), entry.getValue()))
+                .map(entry -> calculateUnrealizedPnlWithCurrency(entry.getKey(), entry.getValue(), baseCurrency))
                 .filter(Objects::nonNull)
                 .filter(m -> m.unrealizedPnl() != null)
                 .collect(Collectors.toList());
@@ -347,6 +523,16 @@ public class MarketService {
      * 计算股票的未实现盈亏
      */
     private MarketDtos.MarketMoverDto calculateUnrealizedPnl(String ticker, List<Holding> holdings) {
+        return calculateUnrealizedPnlWithCurrency(ticker, holdings, "USD");
+    }
+    
+    /**
+     * 计算股票的未实现盈亏（支持货币转换）
+     * @param ticker 股票代码
+     * @param holdings 持仓列表
+     * @param baseCurrency 组合基础货币
+     */
+    private MarketDtos.MarketMoverDto calculateUnrealizedPnlWithCurrency(String ticker, List<Holding> holdings, String baseCurrency) {
         if (holdings.isEmpty()) {
             return null;
         }
@@ -367,8 +553,8 @@ public class MarketService {
                 .findFirst()
                 .orElse(ticker);
 
-        // 获取当前价格
-        Optional<Double> priceOpt = pricingService.priceForHolding(AssetType.stock, ticker);
+        // 获取当前价格（带货币转换）
+        Optional<Double> priceOpt = pricingService.priceForHoldingWithCurrency(AssetType.stock, ticker, baseCurrency);
         Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, ticker);
 
         if (priceOpt.isEmpty()) {
@@ -383,13 +569,23 @@ public class MarketService {
         Double unrealizedPnl = totalValue - totalCost;
         Double unrealizedPnlPercent = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0.0;
         
-        // 计算当日涨跌
+        // 计算当日涨跌（也需要货币转换）
         Double priceChange = 0.0;
         Double priceChangePercent = 0.0;
         if (prevCloseOpt.isPresent() && prevCloseOpt.get() > 0) {
             Double previousClose = prevCloseOpt.get();
-            priceChange = currentPrice - previousClose;
-            priceChangePercent = (priceChange / previousClose) * 100;
+            
+            // 如果前收盘价不是目标货币，需要转换
+            Double convertedPrevClose = previousClose;
+            if (!"USD".equalsIgnoreCase(baseCurrency)) {
+                String sourceCurrency = pricingService.detectSourceCurrency(ticker);
+                if (!sourceCurrency.equalsIgnoreCase(baseCurrency)) {
+                    convertedPrevClose = pricingService.convertCurrency(previousClose, sourceCurrency, baseCurrency);
+                }
+            }
+            
+            priceChange = currentPrice - convertedPrevClose;
+            priceChangePercent = (priceChange / convertedPrevClose) * 100;
         }
         
         String trend = unrealizedPnl >= 0 ? "UP" : "DOWN";
@@ -434,6 +630,19 @@ public class MarketService {
         if (holdings.isEmpty()) {
             return null;
         }
+        
+        // 获取第一个持仓的组合 ID 来获取基础货币
+        // 注意：需要确保 Portfolio 已被初始化（避免懒加载问题）
+        Holding firstHolding = holdings.get(0);
+        Long portfolioId = firstHolding.getPortfolio().getId();
+        
+        System.out.println("[DEBUG] 从第一个持仓获取组合 ID: " + portfolioId);
+        
+        // 直接从数据库查询组合信息（避免懒加载问题）
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new RuntimeException("Portfolio not found: " + portfolioId));
+        String baseCurrency = portfolio.getBaseCurrency();
+        System.out.println("[DEBUG] 组合基础货币：" + baseCurrency);
 
         // 汇总持仓数量
         double totalQuantity = holdings.stream()
@@ -447,10 +656,10 @@ public class MarketService {
                 .findFirst()
                 .orElse(ticker);
 
-        // 查询当前价格和前收盘价（复用PricingService缓存）
-        System.out.println("[DEBUG] 调用PricingService.priceForHolding获取价格...");
-        Optional<Double> priceOpt = pricingService.priceForHolding(AssetType.stock, ticker);
-        System.out.println("[DEBUG] 调用PricingService.fetchPreviousClose获取前收盘价...");
+        // 查询当前价格和前收盘价（带货币转换）
+        System.out.println("[DEBUG] 调用 PricingService.priceForHoldingWithCurrency 获取价格（含货币转换）...");
+        Optional<Double> priceOpt = pricingService.priceForHoldingWithCurrency(AssetType.stock, ticker, baseCurrency);
+        System.out.println("[DEBUG] 调用 PricingService.fetchPreviousClose 获取前收盘价...");
         Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, ticker);
 
         if (priceOpt.isEmpty()) {
@@ -472,18 +681,33 @@ public class MarketService {
         Double currentPrice = priceOpt.get();
         Double marketValue = currentPrice * totalQuantity;
 
-        // 计算涨跌（复用前收盘价）
+        // 计算涨跌（复用前收盘价，需要货币转换）
         Double priceChange = 0.0;
         Double priceChangePercent = 0.0;
         if (prevCloseOpt.isPresent() && prevCloseOpt.get() > 0) {
             Double previousClose = prevCloseOpt.get();
-            priceChange = currentPrice - previousClose;
-            priceChangePercent = (priceChange / previousClose) * 100;
-            System.out.println("[DEBUG] 计算涨跌幅 | 当前价=" + currentPrice + ", 前收=" + previousClose + ", 涨跌=" + round2(priceChangePercent) + "%");
+            
+            // 如果前收盘价不是目标货币，需要转换
+            Double convertedPrevClose = previousClose;
+            if (!"USD".equalsIgnoreCase(baseCurrency)) {
+                String sourceCurrency = pricingService.detectSourceCurrency(ticker);
+                if (!sourceCurrency.equalsIgnoreCase(baseCurrency)) {
+                    convertedPrevClose = pricingService.convertCurrency(previousClose, sourceCurrency, baseCurrency);
+                    System.out.println("[DEBUG] 前收盘价货币转换：" + previousClose + " " + sourceCurrency + 
+                            " → " + convertedPrevClose + " " + baseCurrency);
+                }
+            }
+            
+            priceChange = currentPrice - convertedPrevClose;
+            priceChangePercent = (priceChange / convertedPrevClose) * 100;
+            System.out.println("[DEBUG] 计算涨跌幅 | 当前价=" + currentPrice + ", 前收=" + convertedPrevClose + 
+                    ", 涨跌=" + round2(priceChangePercent) + "%");
         } else {
-            System.out.println("[DEBUG] 未获取到前收盘价，涨跌幅设为0");
+            System.out.println("[DEBUG] 未获取到前收盘价，涨跌幅设为 0");
         }
 
+        System.out.println("[DEBUG] ✓ 成功构建市场数据：" + ticker + ", 当前价=" + currentPrice + ", 市值=" + round2(marketValue));
+        
         return new MarketPriceWithHoldingDto(
                 ticker,
                 name,

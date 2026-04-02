@@ -1,5 +1,6 @@
 package com.training.portfolio.config;
 
+import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -23,6 +24,8 @@ public class AppProperties {
                 "https://c4rm9elh30.execute-api.us-east-1.amazonaws.com/default/cachedPriceData";
         private String massiveBase = "https://api.massive.com/v2";
         private String massiveApiKey = "YOUR_MASSIVE_API_KEY";
+        // 备用API密钥列表（当主密钥触发429错误时使用）
+        private List<String> massiveApiKeyFallbacks = List.of();
         private String alphaVantageBase = "https://www.alphavantage.co/query";
         private String alphaVantageApiKey = "demo";
         private String sinaBase = "https://hq.sinajs.cn";

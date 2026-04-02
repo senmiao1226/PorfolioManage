@@ -294,87 +294,82 @@ public class PricingService {
 
     /** 获取 Massive.com 实时价格 */
     private Optional<Double> fetchMassivePrice(String ticker) {
-        String apiKey = appProperties.getPricing().getMassiveApiKey();
         String base = appProperties.getPricing().getMassiveBase();
         
-        // 使用 Massive.com v3 API 获取股票信息
-        // 文档：https://massive.com/docs/rest
-        // 正确格式：https://api.massive.com/v3/reference/tickers?ticker=AAPL&market=stocks&active=true&apiKey=MY_KEY
-        String url = base + "/reference/tickers?ticker=" + ticker + "&market=stocks&active=true&apiKey=" + apiKey;
+        // 构建所有API密钥列表（主密钥 + 备用密钥）
+        List<String> apiKeys = new ArrayList<>();
+        apiKeys.add(appProperties.getPricing().getMassiveApiKey());
+        apiKeys.addAll(appProperties.getPricing().getMassiveApiKeyFallbacks());
         
         System.out.println("\n========== [MASSIVE API 请求详情] ==========");
         System.out.println("[DEBUG] 尝试从 Massive.com 获取 " + ticker + " 的价格...");
-        System.out.println("[DEBUG] API Key: " + apiKey);
-        System.out.println("[DEBUG] Base URL: " + base);
-        System.out.println("[DEBUG] 完整 URL: " + url);
-        System.out.println("[DEBUG] 请求方法：GET");
+        System.out.println("[DEBUG] 可用 API Key 数量：" + apiKeys.size());
         System.out.println("============================================\n");
         
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("accept", "application/json");
-            // Massive v3 API 使用 apiKey 查询参数，不需要额外的 header
+        for (int i = 0; i < apiKeys.size(); i++) {
+            String apiKey = apiKeys.get(i);
+            String url = base + "/reference/tickers?ticker=" + ticker + "&market=stocks&active=true&apiKey=" + apiKey;
             
-            System.out.println("[DEBUG] 发送 HTTP 请求...");
-            String body = restClient.get()
-                .uri(url)
-                .headers(h -> h.addAll(headers))
-                .retrieve()
-                .body(String.class);
+            System.out.println("[DEBUG] 尝试使用 API Key #" + (i + 1) + ": " + apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
             
-            System.out.println("\n========== [MASSIVE API 响应详情] ==========");
-            System.out.println("[DEBUG] 响应体原始内容：");
-            System.out.println(body);
-            System.out.println("============================================\n");
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.set("accept", "application/json");
                 
-            if (body == null || body.isBlank()) {
-                System.out.println("[DEBUG] ✗ Massive.com 返回空响应");
-                return Optional.empty();
-            }
-            
-            JsonNode root = objectMapper.readTree(body);
-            
-            // 解析 Massive v3 API 响应
-            // 典型响应格式：{"results": [{"ticker": "AAPL", "price": 175.43, ...}]}
-            if (root.has("results")) {
-                JsonNode results = root.get("results");
-                if (results.isArray() && results.size() > 0) {
-                    JsonNode firstResult = results.get(0);
-                    System.out.println("[DEBUG] 获取到结果：" + firstResult.toString());
+                String body = restClient.get()
+                    .uri(url)
+                    .headers(h -> h.addAll(headers))
+                    .retrieve()
+                    .body(String.class);
+                
+                System.out.println("\n========== [MASSIVE API 响应详情] ==========");
+                System.out.println("[DEBUG] 响应体原始内容：");
+                System.out.println(body);
+                System.out.println("============================================\n");
                     
-                    // 尝试多个可能的价格字段
-                    for (String field : List.of("price", "last_price", "close", "current_price", "lastPrice")) {
-                        if (firstResult.has(field) && firstResult.get(field).isNumber()) {
-                            double price = firstResult.get(field).asDouble();
-                            System.out.println("[DEBUG] ✓ 从 Massive.com 获取到价格 (" + field + "): " + price);
-                            System.out.println("============================================\n");
-                            if (price > 0) {
-                                priceCache.put("massive:" + ticker, 
-                                    new CacheEntry<>(price, System.currentTimeMillis()));
-                                return Optional.of(price);
+                if (body == null || body.isBlank()) {
+                    System.out.println("[DEBUG] ✗ Massive.com 返回空响应");
+                    continue;
+                }
+                
+                JsonNode root = objectMapper.readTree(body);
+                
+                // 解析 Massive v3 API 响应
+                if (root.has("results")) {
+                    JsonNode results = root.get("results");
+                    if (results.isArray() && results.size() > 0) {
+                        JsonNode firstResult = results.get(0);
+                        
+                        // 尝试多个可能的价格字段
+                        for (String field : List.of("price", "last_price", "close", "current_price", "lastPrice")) {
+                            if (firstResult.has(field) && firstResult.get(field).isNumber()) {
+                                double price = firstResult.get(field).asDouble();
+                                System.out.println("[DEBUG] ✓ 从 Massive.com 获取到价格 (" + field + "): " + price);
+                                if (price > 0) {
+                                    priceCache.put("massive:" + ticker, 
+                                        new CacheEntry<>(price, System.currentTimeMillis()));
+                                    return Optional.of(price);
+                                }
                             }
                         }
                     }
-                    System.out.println("[DEBUG] ✗ 结果中未找到价格字段");
-                } else {
-                    System.out.println("[DEBUG] ✗ results 数组为空");
                 }
-            } else {
-                System.out.println("[DEBUG] ✗ 响应中没有 results 字段");
-                // 打印所有字段名
-                System.out.println("[DEBUG] 响应中的字段：");
-                root.fieldNames().forEachRemaining(name -> 
-                    System.out.println("  - " + name + ": " + root.get(name)));
+                
+            } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+                System.out.println("[DEBUG] ✗ Massive.com 429 错误：请求频率超限，尝试下一个 API Key...");
+                if (i < apiKeys.size() - 1) {
+                    System.out.println("[DEBUG] 切换到备用 API Key #" + (i + 2));
+                    continue;
+                } else {
+                    System.out.println("[DEBUG] ✗ 所有 API Key 都已用完");
+                }
+            } catch (Exception e) {
+                System.out.println("[DEBUG] ✗ Massive.com 请求失败：" + e.getMessage());
             }
-            
-            System.out.println("[DEBUG] ✗ Massive.com 未找到有效价格");
-            System.out.println("============================================\n");
-        } catch (Exception e) {
-            System.out.println("[DEBUG] ✗ Massive.com 请求失败：" + e.getMessage());
-            System.out.println("[DEBUG] 错误堆栈：");
-            e.printStackTrace();
-            System.out.println("============================================\n");
         }
+        
+        System.out.println("[DEBUG] ✗ Massive.com 未找到有效价格");
+        System.out.println("============================================\n");
         return Optional.empty();
     }
 
@@ -533,81 +528,75 @@ public class PricingService {
 
     /** 获取 Massive.com 前一天收盘价 */
     private Optional<Double> fetchMassivePreviousClose(String ticker) {
-        String apiKey = appProperties.getPricing().getMassiveApiKey();
         String base = appProperties.getPricing().getMassiveBase();
-        
-        // 使用 Massive.com v1 API 获取前一天收盘价
-        // 文档：https://massive.com/docs/rest
-        // 正确格式：https://api.massive.com/v1/open-close/AAPL/2023-01-09?adjusted=true&apiKey=MY_KEY
         LocalDate yesterday = LocalDate.now().minusDays(2);
-        String url = base + "/open-close/" + ticker + "/" + yesterday + "?adjusted=true&apiKey=" + apiKey;
+        
+        // 构建所有API密钥列表（主密钥 + 备用密钥）
+        List<String> apiKeys = new ArrayList<>();
+        apiKeys.add(appProperties.getPricing().getMassiveApiKey());
+        apiKeys.addAll(appProperties.getPricing().getMassiveApiKeyFallbacks());
         
         System.out.println("\n========== [MASSIVE 前一天收盘价请求] ==========");
         System.out.println("[DEBUG] 尝试从 Massive.com 获取 " + ticker + " 的前一天收盘价...");
         System.out.println("[DEBUG] 查询日期：" + yesterday);
-        System.out.println("[DEBUG] API Key: " + apiKey);
-        System.out.println("[DEBUG] Base URL: " + base);
-        System.out.println("[DEBUG] 完整 URL: " + url);
+        System.out.println("[DEBUG] 可用 API Key 数量：" + apiKeys.size());
         System.out.println("============================================\n");
         
-        try {
-            System.out.println("[DEBUG] 发送 HTTP 请求...");
-            String body = restClient.get()
-                .uri(url)
-                .header("accept", "application/json")
-                .retrieve()
-                .body(String.class);
+        for (int i = 0; i < apiKeys.size(); i++) {
+            String apiKey = apiKeys.get(i);
+            String url = base + "/open-close/" + ticker + "/" + yesterday + "?adjusted=true&apiKey=" + apiKey;
             
-            System.out.println("\n========== [MASSIVE 响应详情] ==========");
-            System.out.println("[DEBUG] 响应体原始内容：");
-            System.out.println(body);
+            System.out.println("[DEBUG] 尝试使用 API Key #" + (i + 1) + ": " + apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
             
-            if (body == null || body.isBlank()) {
-                System.out.println("[DEBUG] ✗ Massive.com 返回空响应");
-                return Optional.empty();
-            }
-            
-            JsonNode root = objectMapper.readTree(body);
-            
-            // 解析 Massive v1 API 响应
-            // 典型响应格式：{"ticker": "AAPL", "close": 175.43, "open": 174.50, ...}
-            if (root.has("close")) {
-                double closePrice = root.get("close").asDouble();
-                System.out.println("[DEBUG] ✓ 从 Massive.com 获取到前一天收盘价 (" + yesterday + "): " + closePrice);
-                System.out.println("============================================\n");
-                if (closePrice > 0) {
-                    priceCache.put("massive:" + ticker, 
-                        new CacheEntry<>(closePrice, System.currentTimeMillis()));
-                    return Optional.of(closePrice);
+            try {
+                String body = restClient.get()
+                    .uri(url)
+                    .header("accept", "application/json")
+                    .retrieve()
+                    .body(String.class);
+                
+                System.out.println("\n========== [MASSIVE 响应详情] ==========");
+                System.out.println("[DEBUG] 响应体原始内容：");
+                System.out.println(body);
+                
+                if (body == null || body.isBlank()) {
+                    System.out.println("[DEBUG] ✗ Massive.com 返回空响应");
+                    continue;
                 }
-            } else {
-                System.out.println("[DEBUG] ✗ 响应中没有 close 字段");
-                // 打印所有字段名
-                System.out.println("[DEBUG] 响应中的字段：");
-                root.fieldNames().forEachRemaining(name -> 
-                    System.out.println("  - " + name + ": " + root.get(name)));
+                
+                JsonNode root = objectMapper.readTree(body);
+                
+                // 解析 Massive v1 API 响应
+                if (root.has("close")) {
+                    double closePrice = root.get("close").asDouble();
+                    System.out.println("[DEBUG] ✓ 从 Massive.com 获取到前一天收盘价 (" + yesterday + "): " + closePrice);
+                    System.out.println("============================================\n");
+                    if (closePrice > 0) {
+                        priceCache.put("massive:" + ticker, 
+                            new CacheEntry<>(closePrice, System.currentTimeMillis()));
+                        return Optional.of(closePrice);
+                    }
+                } else {
+                    System.out.println("[DEBUG] ✗ 响应中没有 close 字段");
+                }
+                
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                System.out.println("[DEBUG] ✗ Massive.com 404 错误：该股票不存在或数据不可用");
+                return Optional.empty();
+            } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+                System.out.println("[DEBUG] ✗ Massive.com 429 错误：请求频率超限，尝试下一个 API Key...");
+                if (i < apiKeys.size() - 1) {
+                    System.out.println("[DEBUG] 切换到备用 API Key #" + (i + 2));
+                    continue;
+                } else {
+                    System.out.println("[DEBUG] ✗ 所有 API Key 都已用完，返回空");
+                }
+            } catch (Exception e) {
+                System.out.println("[DEBUG] ✗ Massive.com 请求失败：" + e.getMessage());
             }
-            
-            System.out.println("[DEBUG] ✗ Massive.com 未找到有效收盘价");
-            System.out.println("============================================\n");
-        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
-            // 404 错误：股票不存在或数据不可用
-            System.out.println("[DEBUG] ✗ Massive.com 404 错误：该股票不存在或数据不可用");
-            System.out.println("[DEBUG] 错误信息：" + e.getMessage());
-            System.out.println("============================================\n");
-            return Optional.empty();
-        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
-            // 429 错误：请求频率超限
-            System.out.println("[DEBUG] ✗ Massive.com 429 错误：请求频率超限，请稍后重试");
-            System.out.println("[DEBUG] 错误信息：" + e.getMessage());
-            System.out.println("============================================\n");
-            return Optional.empty();
-        } catch (Exception e) {
-            System.out.println("[DEBUG] ✗ Massive.com 请求失败：" + e.getMessage());
-            System.out.println("[DEBUG] 错误堆栈：");
-            e.printStackTrace();
-            System.out.println("============================================\n");
         }
+        
+        System.out.println("============================================\n");
         return Optional.empty();
     }
 
@@ -1059,6 +1048,11 @@ public class PricingService {
         // Massive v1 `open-close` 对非交易日会返回 404。
         // 为了让买入日基准在周末/节假日仍可用，这里向前回退到最近交易日。
         int maxBackDays = 10;
+        
+        // 构建所有API密钥列表（主密钥 + 备用密钥）
+        List<String> apiKeys = new ArrayList<>();
+        apiKeys.add(appProperties.getPricing().getMassiveApiKey());
+        apiKeys.addAll(appProperties.getPricing().getMassiveApiKeyFallbacks());
 
         for (int i = 0; i <= maxBackDays; i++) {
             LocalDate queryDate = date.minusDays(i);
@@ -1070,47 +1064,59 @@ public class PricingService {
                 return Optional.of(cached.value);
             }
 
-            String apiKey = appProperties.getPricing().getMassiveApiKey();
             String base = appProperties.getPricing().getMassiveBase();
 
-            // URL格式: /v1/open-close/{ticker}/{date}
-            String url = base + "/open-close/" + ticker + "/" + queryDate
-                    + "?adjusted=true&apiKey=" + apiKey;
+            // 尝试所有API密钥
+            for (int keyIndex = 0; keyIndex < apiKeys.size(); keyIndex++) {
+                String apiKey = apiKeys.get(keyIndex);
+                // URL格式: /v1/open-close/{ticker}/{date}
+                String url = base + "/open-close/" + ticker + "/" + queryDate
+                        + "?adjusted=true&apiKey=" + apiKey;
 
-            System.out.println("[DEBUG] Massive API URL: " + url);
+                System.out.println("[DEBUG] Massive API URL (Key #" + (keyIndex + 1) + "): " + url);
 
-            try {
-                String body = restClient.get()
-                        .uri(url)
-                        .header("accept", "application/json")
-                        .retrieve()
-                        .body(String.class);
+                try {
+                    String body = restClient.get()
+                            .uri(url)
+                            .header("accept", "application/json")
+                            .retrieve()
+                            .body(String.class);
 
-                if (body == null || body.isBlank()) {
-                    continue;
+                    if (body == null || body.isBlank()) {
+                        continue;
+                    }
+
+                    JsonNode root = objectMapper.readTree(body);
+
+                    if (root.has("close")) {
+                        double closePrice = root.get("close").asDouble();
+                        String fromDate = root.has("from") ? root.get("from").asText() : queryDate.toString();
+
+                        // 存入缓存：用“原始买入日 date”作为 key
+                        historicalPriceCache.put(cacheKey, new CacheEntry<>(closePrice, System.currentTimeMillis()));
+
+                        System.out.println("[DEBUG] ✓ 从 Massive API 找到历史价格: " + closePrice + " (" + fromDate + ")，已缓存30分钟");
+                        System.out.println("================================================\n");
+                        return Optional.of(closePrice);
+                    }
+
+                    System.out.println("[DEBUG] Massive API 响应中未找到 close 字段");
+                } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                    // 非交易日：继续向前回退
+                    System.out.println("[DEBUG] Massive API 对该日期无数据（404），回退到前一交易日。尝试日期: " + queryDate);
+                    break; // 跳出key循环，继续日期回退
+                } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+                    System.out.println("[DEBUG] ✗ Massive API 429 错误：请求频率超限，尝试下一个 API Key...");
+                    if (keyIndex < apiKeys.size() - 1) {
+                        System.out.println("[DEBUG] 切换到备用 API Key #" + (keyIndex + 2));
+                        continue;
+                    } else {
+                        System.out.println("[DEBUG] ✗ 所有 API Key 都已用完，继续日期回退");
+                    }
+                } catch (Exception e) {
+                    System.out.println("[DEBUG] Massive API 请求失败: " + e.getMessage());
+                    break;
                 }
-
-                JsonNode root = objectMapper.readTree(body);
-
-                if (root.has("close")) {
-                    double closePrice = root.get("close").asDouble();
-                    String fromDate = root.has("from") ? root.get("from").asText() : queryDate.toString();
-
-                    // 存入缓存：用“原始买入日 date”作为 key
-                    historicalPriceCache.put(cacheKey, new CacheEntry<>(closePrice, System.currentTimeMillis()));
-
-                    System.out.println("[DEBUG] ✓ 从 Massive API 找到历史价格: " + closePrice + " (" + fromDate + ")，已缓存30分钟");
-                    System.out.println("================================================\n");
-                    return Optional.of(closePrice);
-                }
-
-                System.out.println("[DEBUG] Massive API 响应中未找到 close 字段");
-            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
-                // 非交易日：继续向前回退
-                System.out.println("[DEBUG] Massive API 对该日期无数据（404），回退到前一交易日。尝试日期: " + queryDate);
-            } catch (Exception e) {
-                System.out.println("[DEBUG] Massive API 请求失败: " + e.getMessage());
-                break;
             }
         }
 
@@ -1224,36 +1230,39 @@ public class PricingService {
             return cached.value;
         }
         
-        String apiKey = appProperties.getPricing().getMassiveApiKey();
-
-        // Massive API v2 格式: /v2/aggs/ticker/AAPL/range/1/day/2025-11-03/2025-11-28
-        String url = String.format(
-            "https://api.massive.com/v2/aggs/ticker/%s/range/1/day/%s/%s?adjusted=true&sort=asc&limit=500&apiKey=%s",
-            t, from.toString(), to.toString(), apiKey
-        );
+        // 构建所有API密钥列表（主密钥 + 备用密钥）
+        List<String> apiKeys = new ArrayList<>();
+        apiKeys.add(appProperties.getPricing().getMassiveApiKey());
+        apiKeys.addAll(appProperties.getPricing().getMassiveApiKeyFallbacks());
 
         System.out.println("\n========== [股票历史数据查询 - Massive API v2] ==========");
         System.out.println("[DEBUG] 股票: " + t);
         System.out.println("[DEBUG] 日期范围: " + from + " 至 " + to);
-        System.out.println("[DEBUG] URL: " + url);
+        System.out.println("[DEBUG] 可用 API Key 数量：" + apiKeys.size());
         System.out.println("=======================================================\n");
 
-        try {
-            String body = restClient.get()
-                .uri(url)
-                .header("accept", "application/json")
-                .retrieve()
-                .body(String.class);
+        // 尝试所有API密钥
+        for (int keyIndex = 0; keyIndex < apiKeys.size(); keyIndex++) {
+            String apiKey = apiKeys.get(keyIndex);
+            // Massive API v2 格式: /v2/aggs/ticker/AAPL/range/1/day/2025-11-03/2025-11-28
+            String url = String.format(
+                "https://api.massive.com/v2/aggs/ticker/%s/range/1/day/%s/%s?adjusted=true&sort=asc&limit=500&apiKey=%s",
+                t, from.toString(), to.toString(), apiKey
+            );
 
-            if (body == null || body.isBlank()) {
-                System.out.println("[DEBUG] ✗ Massive API 返回空响应");
-                // 429错误时尝试返回过期缓存
-                if (cached != null) {
-                    System.out.println("[DEBUG] ⚠ 返回过期缓存数据作为降级方案");
-                    return cached.value;
+            System.out.println("[DEBUG] 尝试使用 API Key #" + (keyIndex + 1) + ": " + apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
+
+            try {
+                String body = restClient.get()
+                    .uri(url)
+                    .header("accept", "application/json")
+                    .retrieve()
+                    .body(String.class);
+
+                if (body == null || body.isBlank()) {
+                    System.out.println("[DEBUG] ✗ Massive API 返回空响应");
+                    continue;
                 }
-                return List.of();
-            }
 
             JsonNode root = objectMapper.readTree(body);
 
@@ -1285,19 +1294,27 @@ public class PricingService {
                     System.out.println("[DEBUG] 错误信息: " + root.get("error").asText());
                 }
             }
-        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
-            System.out.println("[DEBUG] ✗ Massive API 429 错误：请求频率超限");
-            System.out.println("[DEBUG] 建议：请稍后再试，或使用其他数据源");
-            // 429错误时尝试返回过期缓存
-            if (cached != null) {
-                System.out.println("[DEBUG] ⚠ 返回过期缓存数据作为降级方案");
-                return cached.value;
+            } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+                System.out.println("[DEBUG] ✗ Massive API 429 错误：请求频率超限，尝试下一个 API Key...");
+                if (keyIndex < apiKeys.size() - 1) {
+                    System.out.println("[DEBUG] 切换到备用 API Key #" + (keyIndex + 2));
+                    continue;
+                } else {
+                    System.out.println("[DEBUG] ✗ 所有 API Key 都已用完");
+                    // 所有key都用完了，尝试返回过期缓存
+                    if (cached != null) {
+                        System.out.println("[DEBUG] ⚠ 返回过期缓存数据作为降级方案");
+                        return cached.value;
+                    }
+                }
+            } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+                System.out.println("[DEBUG] ✗ Massive API 400 错误：请求参数错误");
+                System.out.println("[DEBUG] 可能原因：日期范围无效或股票代码不存在");
+                break; // 400错误不需要尝试其他key
+            } catch (Exception e) {
+                System.out.println("[DEBUG] ✗ Massive API 请求失败: " + e.getMessage());
+                break; // 其他错误不需要尝试其他key
             }
-        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
-            System.out.println("[DEBUG] ✗ Massive API 400 错误：请求参数错误");
-            System.out.println("[DEBUG] 可能原因：日期范围无效或股票代码不存在");
-        } catch (Exception e) {
-            System.out.println("[DEBUG] ✗ Massive API 请求失败: " + e.getMessage());
         }
 
         System.out.println("=======================================================\n");

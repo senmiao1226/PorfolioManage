@@ -55,4 +55,19 @@ public interface HoldingRepository extends JpaRepository<Holding, Long> {
            "AND h.ticker = :ticker")
     Double sumQuantityByPortfolioIdAndTicker(@Param("portfolioId") Long portfolioId, 
                                               @Param("ticker") String ticker);
+    
+    /**
+     * 查询所有持仓（带组合信息，避免懒加载问题）
+     */
+    @Query("SELECT DISTINCT h FROM Holding h JOIN FETCH h.portfolio " +
+           "WHERE h.assetType != 'cash' " +
+           "AND h.ticker IS NOT NULL " +
+           "AND h.ticker != ''")
+    List<Holding> findAllWithPortfolio();
+    
+    /**
+     * 查询所有持仓（包含现金，用于调试）
+     */
+    @Query("SELECT h FROM Holding h JOIN FETCH h.portfolio ORDER BY h.id")
+    List<Holding> findAllWithPortfolioIncludingCash();
 }

@@ -35,6 +35,10 @@ app:
     # GitHub: https://github.com/massive-com
     massive-base: "https://api.massive.com/v1"
     massive-api-key: "HLPOYd_lJllASYZ4THMrgvNrlPNYQ2T0"  # 请在 https://massive.com 注册获取
+    # 备用 API 密钥列表（当主密钥触发 429 错误时自动切换）
+    massive-api-key-fallbacks:
+      - "u_ZZkCUbuNA42yGa95hpfWlFP0ma13aw"
+      - "h2uFXvnLGOUjQvJLILevr_DEfp7MxUv_"
     # 备用数据源：Alpha Vantage
     alpha-vantage-base: "https://www.alphavantage.co/query"
     alpha-vantage-api-key: "PH6U2KRY55T7M39T"  # 免费注册获取：https://www.alphavantage.co/support/#api-key

@@ -41,8 +41,6 @@
             v-for="stock in holdingsData" 
             :key="stock.ticker"
             class="stock-card"
-            :class="{ 'up': stock.priceChangePercent > 0, 'down': stock.priceChangePercent < 0 }"
-            @click="showDetail(stock.ticker)"
           >
             <div class="stock-header">
               <span class="ticker">{{ stock.ticker }}</span>
@@ -50,13 +48,10 @@
             </div>
             <div class="stock-price">
               <span class="current">{{ fmtMoney(stock.currentPrice) }}</span>
-              <span class="change" :class="{ 'positive': stock.priceChangePercent > 0, 'negative': stock.priceChangePercent < 0 }">
-                {{ stock.priceChangePercent > 0 ? '+' : '' }}{{ stock.priceChangePercent?.toFixed(2) }}%
-              </span>
             </div>
             <div class="stock-holding">
               <span class="quantity">Shares: {{ stock.holdingQuantity }}</span>
-              <span class="value">Position: {{ fmtMoney(stock.holdingValue) }}</span>
+              <span class="value">Value: {{ fmtMoney(stock.holdingValue) }}</span>
             </div>
           </div>
         </div>
@@ -78,8 +73,12 @@
                 <span class="name">{{ item.name }}</span>
               </div>
               <div class="mover-pnl">
-                <span class="pnl-value positive">+{{ fmtMoney(item.unrealizedPnl) }}</span>
-                <span class="pnl-percent positive">+{{ item.unrealizedPnlPercent?.toFixed(2) }}%</span>
+                <span class="pnl-value" :class="{ 'positive': item.unrealizedPnl >= 0, 'negative': item.unrealizedPnl < 0 }">
+                  {{ item.unrealizedPnl >= 0 ? '+' : '' }}{{ fmtMoney(item.unrealizedPnl) }}
+                </span>
+                <span class="pnl-percent" :class="{ 'positive': item.unrealizedPnlPercent >= 0, 'negative': item.unrealizedPnlPercent < 0 }">
+                  {{ item.unrealizedPnlPercent >= 0 ? '+' : '' }}{{ item.unrealizedPnlPercent?.toFixed(2) }}%
+                </span>
               </div>
             </div>
           </div>
@@ -96,8 +95,12 @@
                 <span class="name">{{ item.name }}</span>
               </div>
               <div class="mover-pnl">
-                <span class="pnl-value negative">{{ fmtMoney(item.unrealizedPnl) }}</span>
-                <span class="pnl-percent negative">{{ item.unrealizedPnlPercent?.toFixed(2) }}%</span>
+                <span class="pnl-value" :class="{ 'positive': item.unrealizedPnl >= 0, 'negative': item.unrealizedPnl < 0 }">
+                  {{ item.unrealizedPnl >= 0 ? '+' : '' }}{{ fmtMoney(item.unrealizedPnl) }}
+                </span>
+                <span class="pnl-percent" :class="{ 'positive': item.unrealizedPnlPercent >= 0, 'negative': item.unrealizedPnlPercent < 0 }">
+                  {{ item.unrealizedPnlPercent >= 0 ? '+' : '' }}{{ item.unrealizedPnlPercent?.toFixed(2) }}%
+                </span>
               </div>
             </div>
           </div>
@@ -404,6 +407,13 @@ const loading = ref(false);
 const error = ref('');
 const portfolios = ref([]);
 const selectedPortfolioId = ref('');
+
+onMounted(() => {
+  // 初始化为 All Holdings 模式
+  selectedPortfolioId.value = '';
+  loadData();
+});
+
 const holdingsData = ref([]);
 const gainers = ref([]);
 const losers = ref([]);
@@ -727,18 +737,19 @@ async function loadData() {
     // 先加载组合列表
     await loadPortfolios();
     
-    // 等待 portfolios 更新后再决定使用哪个组合
-    const effectivePortfolioId = selectedPortfolioId.value || (portfolios.value.length > 0 ? portfolios.value[0].id : null);
+    // 如果没有手动选择组合，使用 All Holdings 模式
+    const effectivePortfolioId = selectedPortfolioId.value || null;
     console.log('Effective portfolio ID:', effectivePortfolioId);
     
     // 加载持仓行情
     if (effectivePortfolioId) {
       holdingsData.value = await api.getMyHoldingsMarketData(effectivePortfolioId);
     } else {
+      console.log('Loading all holdings data...');
       holdingsData.value = await api.getAllHoldingsMarketData();
     }
     
-    // 加载涨跌榜
+    // 加载涨跌榜 - 修改为：All Holdings 模式下也尝试加载（使用第一个组合）
     if (effectivePortfolioId) {
       try {
         console.log('Loading gainers/losers for portfolio:', effectivePortfolioId);
@@ -747,6 +758,18 @@ async function loadData() {
         losers.value = bundle?.losers || [];
       } catch (e) {
         console.error('Failed to load gainers/losers:', e);
+        gainers.value = [];
+        losers.value = [];
+      }
+    } else if (portfolios.value.length > 0) {
+      // All Holdings 模式：使用全局涨跌榜接口
+      try {
+        console.log('All Holdings mode: Loading global gainers/losers');
+        const bundle = await api.getGlobalMarketMoversBundle();
+        gainers.value = bundle?.gainers || [];
+        losers.value = bundle?.losers || [];
+      } catch (e) {
+        console.error('Failed to load global gainers/losers:', e);
         gainers.value = [];
         losers.value = [];
       }
@@ -812,9 +835,6 @@ function getBarHeight(price) {
   return ((price - min) / range) * 80 + 10;
 }
 
-onMounted(() => {
-  loadData();
-});
 </script>
 
 <style scoped>
@@ -912,14 +932,12 @@ onMounted(() => {
   padding: 1rem;
   background: #f9fafb;
   border-radius: 10px;
-  cursor: pointer;
   transition: all 0.2s;
-  border-left: 4px solid transparent;
 }
 
 .stock-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  cursor: default;
 }
 
 .stock-card.up {

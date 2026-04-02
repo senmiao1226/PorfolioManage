@@ -145,6 +145,15 @@ public class MarketController {
             @RequestParam(defaultValue = "5") int topN) {
         return ResponseEntity.ok(marketService.getMarketMoversBundle(portfolioId, topN));
     }
+    
+    /**
+     * 全局涨跌榜：基于所有组合的持仓计算
+     */
+    @GetMapping("/movers/global")
+    public ResponseEntity<MarketDtos.MarketMoversBundleDto> getGlobalMarketMoversBundle(
+            @RequestParam(defaultValue = "5") int topN) {
+        return ResponseEntity.ok(marketService.getGlobalMarketMoversBundle(topN));
+    }
 
     /**
      * 获取数据源提供商列表
