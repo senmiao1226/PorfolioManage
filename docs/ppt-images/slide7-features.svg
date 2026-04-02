@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+  <defs>
+    <linearGradient id="featGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fef3c7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fde68a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Title -->
+  <text x="480" y="50" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a1a">核心功能 - 四宫格展示</text>
+  <text x="480" y="75" text-anchor="middle" font-size="16" fill="#6b7280">Slide 7 · 投资组合管理系统</text>
+  
+  <!-- Dashboard -->
+  <g transform="translate(240, 180)">
+    <rect x="-200" y="-100" width="400" height="200" rx="12" fill="url(#featGrad1)" stroke="#f59e0b" stroke-width="3"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="24" font-weight="bold" fill="#92400e">📈 Dashboard</text>
+    <text x="-170" y="-30" font-size="14" fill="#78350f">• KPI 卡片：总资产/总成本/未实现盈亏</text>
+    <text x="-170" y="-8" font-size="14" fill="#78350f">• 资产分布：股票/债券/现金占比</text>
+    <text x="-170" y="14" font-size="14" fill="#78350f">• 市场概览：主要指数涨跌幅</text>
+  </g>
+  
+  <!-- Portfolio -->
+  <g transform="translate(720, 180)">
+    <rect x="-200" y="-100" width="400" height="200" rx="12" fill="url(#featGrad1)" stroke="#f59e0b" stroke-width="3"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="24" font-weight="bold" fill="#92400e">💼 Portfolio</text>
+    <text x="-170" y="-30" font-size="14" fill="#78350f">• 组合管理：创建/编辑/删除</text>
+    <text x="-170" y="-8" font-size="14" fill="#78350f">• 持仓明细：股票/债券/现金</text>
+    <text x="-170" y="14" font-size="14" fill="#78350f">• 估值摘要：市值/盈亏/收益率</text>
+  </g>
+  
+  <!-- Market -->
+  <g transform="translate(240, 420)">
+    <rect x="-200" y="-100" width="400" height="200" rx="12" fill="url(#featGrad1)" stroke="#f59e0b" stroke-width="3"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="24" font-weight="bold" fill="#92400e">🌍 Market</text>
+    <text x="-170" y="-30" font-size="14" fill="#78350f">• 热门股票：AAPL/MSFT/TSLA</text>
+    <text x="-170" y="-8" font-size="14" fill="#78350f">• 涨跌榜：实时涨幅/跌幅排名</text>
+    <text x="-170" y="14" font-size="14" fill="#78350f">• 搜索详情：代码/名称/前收盘价</text>
+  </g>
+  
+  <!-- Analytics -->
+  <g transform="translate(720, 420)">
+    <rect x="-200" y="-100" width="400" height="200" rx="12" fill="url(#featGrad1)" stroke="#f59e0b" stroke-width="3"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="24" font-weight="bold" fill="#92400e">📊 Analytics</text>
+    <text x="-170" y="-30" font-size="14" fill="#78350f">• 资产配置：饼图可视化</text>
+    <text x="-170" y="-8" font-size="14" fill="#78350f">• 历史走势：SVG 折线图</text>
+    <text x="-170" y="14" font-size="14" fill="#78350f">• 业绩统计：收益率/波动率</text>
+  </g>
+</svg>

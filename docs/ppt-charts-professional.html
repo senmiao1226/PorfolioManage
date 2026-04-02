@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT 专业图表集 - 投资组合管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #1a1a1a;
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            font-size: 1rem;
+            margin-bottom: 40px;
+        }
+        
+        .slide-container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            page-break-inside: avoid;
+        }
+        
+        .slide-title {
+            font-size: 1.5rem;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #4f46e5;
+            font-weight: 700;
+        }
+        
+        .slide-number {
+            display: inline-block;
+            background: #4f46e5;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .diagram {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 15px 0;
+            border: 2px solid #e5e7eb;
+        }
+        
+        /* Slide 3 - 时间轴 */
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 30px 10px;
+            position: relative;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            right: 50px;
+            height: 4px;
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+            z-index: 1;
+        }
+        
+        .timeline-item {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            flex: 1;
+        }
+        
+        .timeline-dot {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 4px solid #4f46e5;
+            border-radius: 50%;
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #4f46e5;
+            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.2);
+        }
+        
+        .timeline-day {
+            background: #4f46e5;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .timeline-task {
+            color: #374151;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        /* Slide 4 - 流程图 */
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .flow-step {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+            border: 2px solid #4f46e5;
+            border-radius: 10px;
+            padding: 18px 30px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+        }
+        
+        .flow-step h4 {
+            color: #1e40af;
+            font-size: 1.1rem;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+        
+        .flow-step p {
+            color: #1e3a8a;
+            font-size: 0.85rem;
+        }
+        
+        .flow-arrow {
+            font-size: 1.8rem;
+            color: #4f46e5;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        /* Slide 7 - 四宫格 */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+        }
+        
+        .feature-card h4 {
+            color: #92400e;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .feature-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .feature-card li {
+            padding: 5px 0;
+            color: #78350f;
+            font-size: 0.85rem;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .feature-card li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #f59e0b;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Slide 8 - ER 图 */
+        .er-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 50px;
+            padding: 30px;
+        }
+        
+        .entity {
+            background: white;
+            border: 3px solid #4f46e5;
+            border-radius: 10px;
+            padding: 18px;
+            min-width: 240px;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+        }
+        
+        .entity-header {
+            background: #4f46e5;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        
+        .entity-field {
+            padding: 6px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #374151;
+        }
+        
+        .entity-field:last-child {
+            border-bottom: none;
+        }
+        
+        .relationship {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #6b7280;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        
+        .relationship-line {
+            width: 60px;
+            height: 3px;
+            background: #4f46e5;
+            position: relative;
+        }
+        
+        .relationship-line::before {
+            content: '1';
+            position: absolute;
+            left: -20px;
+            top: -8px;
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .relationship-line::after {
+            content: 'N';
+            position: absolute;
+            right: -20px;
+            top: -8px;
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        /* Slide 10 - 故障转移流程 */
+        .fault-tolerance {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+        }
+        
+        .ft-step {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            padding: 16px 25px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+        
+        .ft-step h4 {
+            color: #1e40af;
+            font-size: 1rem;
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+        
+        .ft-step p {
+            color: #1e3a8a;
+            font-size: 0.8rem;
+        }
+        
+        .ft-arrow {
+            font-size: 1.5rem;
+            color: #3b82f6;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .cache-box {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+            border: 2px solid #22c55e;
+            border-radius: 10px;
+            padding: 16px 25px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+        }
+        
+        .cache-box h4 {
+            color: #166534;
+            font-size: 1rem;
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+        
+        .cache-box p {
+            color: #14532d;
+            font-size: 0.8rem;
+        }
+        
+        .highlights {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .highlight-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 2px solid #22c55e;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .highlight-icon {
+            font-size: 1.8rem;
+        }
+        
+        .highlight-text {
+            color: #166534;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        /* Slide 12 - 对比表格 */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .comparison-table th {
+            background: #4f46e5;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        
+        .comparison-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background: #f9fafb;
+        }
+        
+        .comparison-table code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #dc2626;
+        }
+        
+        /* Slide 13 - 问题修复表 */
+        .issue-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .issue-table th {
+            background: #f59e0b;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        
+        .issue-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+        }
+        
+        .issue-table tr:nth-child(even) {
+            background: #fffbeb;
+        }
+        
+        .issue-table .emoji {
+            font-size: 1.2rem;
+            margin-right: 5px;
+        }
+        
+        /* 打印提示 */
+        .print-hint {
+            text-align: center;
+            color: #6b7280;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+            
+            .slide-container {
+                box-shadow: none;
+                border: 1px solid #e5e7eb;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 PPT 专业图表集</h1>
+        <p class="subtitle">投资组合管理系统 · 适合插入 PPT 的尺寸优化版</p>
+        
+        <!-- Slide 3: 项目背景 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 3</span>
+            <h2 class="slide-title">项目背景 - 4 天敏捷开发时间轴</h2>
+            <div class="diagram">
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-dot">①</div>
+                        <div class="timeline-day">Day 1</div>
+                        <div class="timeline-task">环境搭建<br>项目初始化</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot">②</div>
+                        <div class="timeline-day">Day 2</div>
+                        <div class="timeline-task">估值口径统一<br>组合/持仓 CRUD</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot">③</div>
+                        <div class="timeline-day">Day 3</div>
+                        <div class="timeline-task">行情多源聚合<br>故障转移实现</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot">④</div>
+                        <div class="timeline-day">Day 4</div>
+                        <div class="timeline-task">分析可视化<br>业绩统计展示</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 4: 实施思路 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 4</span>
+            <h2 class="slide-title">实施思路 - 三阶段递进</h2>
+            <div class="diagram">
+                <div class="flow-diagram">
+                    <div class="flow-step">
+                        <h4>🎯 主链路建设</h4>
+                        <p>组合/持仓管理 · 估值摘要计算 · 分析展示</p>
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step">
+                        <h4>🛡️ 可靠性增强</h4>
+                        <p>多源缓存 · 故障转移 · 降级策略</p>
+                    </div>
+                    <div class="flow-arrow">⬇</div>
+                    <div class="flow-step">
+                        <h4>⚙️ 工程化交付</h4>
+                        <p>Swagger 文档 · 配置化 · 健康检查</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 7: 成果展示 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 7</span>
+            <h2 class="slide-title">核心功能 - 四宫格展示</h2>
+            <div class="diagram">
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>📈 Dashboard</h4>
+                        <ul>
+                            <li>KPI 卡片：总资产/总成本/未实现盈亏</li>
+                            <li>资产分布：股票/债券/现金占比</li>
+                            <li>市场概览：主要指数涨跌幅</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>💼 Portfolio</h4>
+                        <ul>
+                            <li>组合管理：创建/编辑/删除</li>
+                            <li>持仓明细：股票/债券/现金</li>
+                            <li>估值摘要：市值/盈亏/收益率</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🌍 Market</h4>
+                        <ul>
+                            <li>热门股票：AAPL/MSFT/TSLA</li>
+                            <li>涨跌榜：实时涨幅/跌幅排名</li>
+                            <li>搜索详情：代码/名称/前收盘价</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📊 Analytics</h4>
+                        <ul>
+                            <li>资产配置：饼图可视化</li>
+                            <li>历史走势：SVG 折线图</li>
+                            <li>业绩统计：收益率/波动率</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 8: 数据模型 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 8</span>
+            <h2 class="slide-title">数据模型 - ER 关系图</h2>
+            <div class="diagram">
+                <div class="er-diagram">
+                    <div class="entity">
+                        <div class="entity-header">Portfolio</div>
+                        <div class="entity-field">id: INT (PK)</div>
+                        <div class="entity-field">name: VARCHAR(200)</div>
+                        <div class="entity-field">description: TEXT</div>
+                        <div class="entity-field">baseCurrency: VARCHAR(8)</div>
+                        <div class="entity-field">createdAt: DATETIME</div>
+                    </div>
+                    
+                    <div class="relationship">
+                        <div class="relationship-line"></div>
+                        <span>1:N</span>
+                    </div>
+                    
+                    <div class="entity">
+                        <div class="entity-header">Holding</div>
+                        <div class="entity-field">id: INT (PK)</div>
+                        <div class="entity-field">portfolio_id: INT (FK)</div>
+                        <div class="entity-field">assetType: ENUM</div>
+                        <div class="entity-field">ticker: VARCHAR(32)</div>
+                        <div class="entity-field">quantity: DOUBLE</div>
+                        <div class="entity-field">averageCost: DOUBLE</div>
+                        <div class="entity-field">purchaseDate: DATE</div>
+                    </div>
+                </div>
+            </div>
+            <p style="text-align: center; color: #6b7280; margin-top: 15px; font-size: 0.95rem;">
+                <strong>设计原则：</strong>持仓结构化落库，估值按需计算
+            </p>
+        </div>
+        
+        <!-- Slide 10: 多源行情 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 10</span>
+            <h2 class="slide-title">多源行情与故障转移机制</h2>
+            <div class="diagram">
+                <div class="fault-tolerance">
+                    <div class="ft-step">
+                        <h4>🥇 Cached API（主数据源）</h4>
+                        <p>课程提供的缓存价格服务 - 优先使用</p>
+                    </div>
+                    <div class="ft-arrow">⬇ 失败时自动切换</div>
+                    <div class="ft-step">
+                        <h4>🥈 Alpha Vantage（备用数据源）</h4>
+                        <p>美股数据 - 专业金融 API</p>
+                    </div>
+                    <div class="ft-arrow">⬇ 失败时自动切换</div>
+                    <div class="ft-step">
+                        <h4>🥉 新浪财经（特定市场）</h4>
+                        <p>A 股 (sh/sz) / 港股 (hk) - 国内数据源</p>
+                    </div>
+                    <div class="ft-arrow">⬇</div>
+                    <div class="cache-box">
+                        <h4>💾 内存缓存（ConcurrentHashMap）</h4>
+                        <p><strong>TTL: 5 分钟</strong> - 减少 API 调用，提升响应速度</p>
+                    </div>
+                </div>
+                
+                <div class="highlights">
+                    <div class="highlight-card">
+                        <span class="highlight-icon">✅</span>
+                        <span class="highlight-text">价格缓存 5min<br>历史序列 10min</span>
+                    </div>
+                    <div class="highlight-card">
+                        <span class="highlight-icon">🔄</span>
+                        <span class="highlight-text">自动故障转移<br>无需人工干预</span>
+                    </div>
+                    <div class="highlight-card">
+                        <span class="highlight-icon">🛡️</span>
+                        <span class="highlight-text">优雅降级处理<br>返回"—"不崩溃</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 12: 可运维交付 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 12</span>
+            <h2 class="slide-title">可运维与交付能力</h2>
+            <div class="diagram">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th width="25%">Swagger UI</th>
+                            <th width="25%">Health Check</th>
+                            <th width="25%">配置化</th>
+                            <th width="25%">CORS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/swagger-ui.html</code></td>
+                            <td><code>/health</code></td>
+                            <td><code>application.yml</code></td>
+                            <td>@CrossOrigin</td>
+                        </tr>
+                        <tr>
+                            <td>在线测试 API</td>
+                            <td>status=ok</td>
+                            <td>数据源/跨域/汇率</td>
+                            <td>Vite Proxy</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Slide 13: 挑战与反思 -->
+        <div class="slide-container">
+            <span class="slide-number">Slide 13</span>
+            <h2 class="slide-title">挑战与反思 - 问题与修复对照</h2>
+            <div class="diagram">
+                <table class="issue-table">
+                    <thead>
+                        <tr>
+                            <th width="40%">问题</th>
+                            <th width="60%">修复方案</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="emoji">⚠️</span>NPE 空指针异常</td>
+                            <td><span class="emoji">✅</span>Optional + 降级策略 - 返回空值不崩溃</td>
+                        </tr>
+                        <tr>
+                            <td><span class="emoji">⚠️</span>CORS 跨域请求被拒</td>
+                            <td><span class="emoji">✅</span>后端 @CrossOrigin + 前端 Vite Proxy 双保险</td>
+                        </tr>
+                        <tr>
+                            <td><span class="emoji">⚠️</span>日期格式不一致</td>
+                            <td><span class="emoji">✅</span>统一 ISO 8601 标准格式</td>
+                        </tr>
+                        <tr>
+                            <td><span class="emoji">⚠️</span>double 精度丢失</td>
+                            <td><span class="emoji">✅</span>round4/round2 统一舍入规则</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="print-hint">
+            💡 <strong>使用说明：</strong><br>
+            1. 按 Ctrl+P 打印此页面，选择"另存为 PDF"<br>
+            2. 或在浏览器中直接截图（推荐工具：Snipaste、微信截图）<br>
+            3. 所有图片已优化为适合 PPT 的尺寸（宽 800-1000px），可直接插入幻灯片<br>
+            4. 建议背景色：白色或浅灰色，保持 PPT 整体风格统一
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统架构图 - 投资组合管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 60px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1400px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #1a1a1a;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            font-size: 1.2rem;
+            margin-bottom: 50px;
+        }
+        
+        /* 标准分层架构图 */
+        .architecture-wrapper {
+            position: relative;
+            padding: 40px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            border: 2px solid #e5e7eb;
+        }
+        
+        .layer {
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .layer-title {
+            position: absolute;
+            left: -120px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #4f46e5;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        
+        .layer-box {
+            background: white;
+            border: 3px solid #4f46e5;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+        }
+        
+        /* 表现层 */
+        .presentation-layer .layer-box {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+            border-color: #4f46e5;
+        }
+        
+        .vue-components {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .component-box {
+            background: white;
+            border: 2px solid #4f46e5;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            font-weight: 600;
+            color: #1e40af;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);
+        }
+        
+        /* 应用层 */
+        .application-layer .layer-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-color: #f59e0b;
+        }
+        
+        .controllers {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .controller-box {
+            background: white;
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+        }
+        
+        /* 业务层 */
+        .business-layer .layer-box {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-color: #10b981;
+        }
+        
+        .services {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .service-module {
+            background: white;
+            border: 2px solid #10b981;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+        
+        .service-module h4 {
+            color: #065f46;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        
+        .service-list {
+            list-style: none;
+        }
+        
+        .service-list li {
+            padding: 6px 0;
+            color: #374151;
+            font-size: 0.9rem;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+        
+        .service-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .service-list li::before {
+            content: '▸ ';
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        /* 数据访问层 */
+        .data-access-layer .layer-box {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border-color: #ef4444;
+        }
+        
+        .repositories {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .repo-box {
+            background: white;
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            padding: 15px 30px;
+            text-align: center;
+            font-weight: 600;
+            color: #991b1b;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+        }
+        
+        /* 基础设施层 */
+        .infrastructure-layer .layer-box {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-color: #6b7280;
+        }
+        
+        .infrastructure-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .infra-item {
+            background: white;
+            border: 2px solid #6b7280;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.15);
+        }
+        
+        .infra-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .infra-item h4 {
+            color: #374151;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .infra-item p {
+            color: #6b7280;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        /* 外部服务层 */
+        .external-layer .layer-box {
+            background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+            border-color: #8b5cf6;
+        }
+        
+        .external-services {
+            display: flex;
+            gap: 25px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .external-service {
+            background: white;
+            border: 2px solid #8b5cf6;
+            border-radius: 8px;
+            padding: 15px 25px;
+            text-align: center;
+            font-weight: 600;
+            color: #6d28d9;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+            position: relative;
+        }
+        
+        .external-service::after {
+            content: '🌐';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 1.2rem;
+        }
+        
+        /* 连接箭头 */
+        .connector {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .arrow-down {
+            font-size: 2rem;
+            color: #6b7280;
+            font-weight: bold;
+        }
+        
+        .bidirectional-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #6b7280;
+            font-size: 1.5rem;
+            margin: 15px 0;
+        }
+        
+        /* 图例 */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e5e7eb;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid currentColor;
+        }
+        
+        /* 技术栈标注 */
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 50px;
+            padding-top: 40px;
+            border-top: 3px solid #e5e7eb;
+        }
+        
+        .stack-column {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            border-left: 5px solid #4f46e5;
+        }
+        
+        .stack-column h3 {
+            color: #4f46e5;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        
+        .stack-list {
+            list-style: none;
+        }
+        
+        .stack-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: #374151;
+            font-size: 0.95rem;
+        }
+        
+        .stack-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* 响应式说明 */
+        .responsive-note {
+            margin-top: 30px;
+            padding: 20px;
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+        }
+        
+        .responsive-note p {
+            color: #1e40af;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ 系统架构图</h1>
+        <p class="subtitle">投资组合管理系统 · 分层架构设计</p>
+        
+        <div class="architecture-wrapper">
+            <!-- 表现层 -->
+            <div class="layer presentation-layer">
+                <div class="layer-title">Presentation</div>
+                <div class="layer-box">
+                    <h3 style="color: #1e40af; margin-bottom: 10px; font-size: 1.4rem;">🖥️ 表现层 (Vue 3 Frontend)</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">基于 Vue 3 + Vite 的现代化单页应用</p>
+                    <div class="vue-components">
+                        <div class="component-box">Dashboard.vue<br><span style="font-size:0.75rem;color:#6b7280;">仪表盘总览</span></div>
+                        <div class="component-box">Portfolio.vue<br><span style="font-size:0.75rem;color:#6b7280;">组合管理</span></div>
+                        <div class="component-box">Market.vue<br><span style="font-size:0.75rem;color:#6b7280;">行情追踪</span></div>
+                        <div class="component-box">Analytics.vue<br><span style="font-size:0.75rem;color:#6b7280;">业绩分析</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connector">
+                <div class="arrow-down">⬇ REST API / JSON ⬆</div>
+            </div>
+            
+            <!-- 应用层 -->
+            <div class="layer application-layer">
+                <div class="layer-title">Application</div>
+                <div class="layer-box">
+                    <h3 style="color: #92400e; margin-bottom: 10px; font-size: 1.4rem;">🎮 应用层 (Spring Controllers)</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">RESTful API 接口层，处理 HTTP 请求与响应</p>
+                    <div class="controllers">
+                        <div class="controller-box">DashboardController<br>仪表盘数据聚合</div>
+                        <div class="controller-box">PortfolioController<br>组合 CRUD 操作</div>
+                        <div class="controller-box">MarketController<br>行情查询接口</div>
+                        <div class="controller-box">AnalyticsController<br>分析数据统计</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connector">
+                <div class="bidirectional-arrow">
+                    <span>⬇</span>
+                    <span style="font-size: 0.9rem; color: #9ca3af;">业务调用</span>
+                    <span>⬆</span>
+                </div>
+            </div>
+            
+            <!-- 业务层 -->
+            <div class="layer business-layer">
+                <div class="layer-title">Business</div>
+                <div class="layer-box">
+                    <h3 style="color: #065f46; margin-bottom: 10px; font-size: 1.4rem;">⚙️ 业务逻辑层 (Services)</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">核心业务逻辑处理与数据协调</p>
+                    <div class="services">
+                        <div class="service-module">
+                            <h4>PortfolioService</h4>
+                            <ul class="service-list">
+                                <li>创建/更新/删除组合</li>
+                                <li>持仓管理与估值计算</li>
+                                <li>资产分布统计</li>
+                                <li>收益率分析</li>
+                            </ul>
+                        </div>
+                        <div class="service-module">
+                            <h4>PricingService</h4>
+                            <ul class="service-list">
+                                <li>多源行情价格查询</li>
+                                <li>故障转移机制</li>
+                                <li>内存缓存策略 (TTL 5min)</li>
+                                <li>货币汇率换算</li>
+                            </ul>
+                        </div>
+                        <div class="service-module">
+                            <h4>MarketService</h4>
+                            <ul class="service-list">
+                                <li>市场指数聚合</li>
+                                <li>涨跌榜排名</li>
+                                <li>股票搜索与详情</li>
+                                <li>前收盘价计算</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connector">
+                <div class="bidirectional-arrow">
+                    <span>⬇</span>
+                    <span style="font-size: 0.9rem; color: #9ca3af;">数据持久化</span>
+                    <span>⬆</span>
+                </div>
+            </div>
+            
+            <!-- 数据访问层 -->
+            <div class="layer data-access-layer">
+                <div class="layer-title">Data Access</div>
+                <div class="layer-box">
+                    <h3 style="color: #991b1b; margin-bottom: 10px; font-size: 1.4rem;">💾 数据访问层 (JPA Repositories)</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">数据持久化与数据库交互</p>
+                    <div class="repositories">
+                        <div class="repo-box">📁 PortfolioRepository<br><span style="font-size:0.8rem;color:#6b7280;">组合数据访问</span></div>
+                        <div class="repo-box">📁 HoldingRepository<br><span style="font-size:0.8rem;color:#6b7280;">持仓数据访问</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connector">
+                <div class="bidirectional-arrow">
+                    <span>⬇</span>
+                    <span style="font-size: 0.9rem; color: #9ca3af;">ORM 映射</span>
+                    <span>⬆</span>
+                </div>
+            </div>
+            
+            <!-- 基础设施层 -->
+            <div class="layer infrastructure-layer">
+                <div class="layer-title">Infrastructure</div>
+                <div class="layer-box">
+                    <h3 style="color: #374151; margin-bottom: 10px; font-size: 1.4rem;">🏛️ 基础设施层</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">数据存储、缓存与配置管理</p>
+                    <div class="infrastructure-grid">
+                        <div class="infra-item">
+                            <div class="infra-icon">🗄️</div>
+                            <h4>MySQL 8</h4>
+                            <p>portfolios 表<br>holdings 表<br>JPA/Hibernate ORM</p>
+                        </div>
+                        <div class="infra-item">
+                            <div class="infra-icon">🧠</div>
+                            <h4>内存缓存</h4>
+                            <p>ConcurrentHashMap<br>价格缓存 TTL 5min<br>历史序列 TTL 10min</p>
+                        </div>
+                        <div class="infra-item">
+                            <div class="infra-icon">⚙️</div>
+                            <h4>配置中心</h4>
+                            <p>application.yml<br>数据源配置<br>跨域/汇率/API Key</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connector">
+                <div class="bidirectional-arrow">
+                    <span>⬇</span>
+                    <span style="font-size: 0.9rem; color: #9ca3af;">HTTP 调用</span>
+                    <span>⬆</span>
+                </div>
+            </div>
+            
+            <!-- 外部服务层 -->
+            <div class="layer external-layer">
+                <div class="layer-title">External</div>
+                <div class="layer-box">
+                    <h3 style="color: #6d28d9; margin-bottom: 10px; font-size: 1.4rem;">🌐 外部数据服务</h3>
+                    <p style="color: #6b7280; font-size: 0.9rem;">第三方金融数据 API（故障转移链）</p>
+                    <div class="external-services">
+                        <div class="external-service">
+                            🥇 Cached API<br>
+                            <span style="font-size:0.8rem;color:#6b7280;">主数据源</span>
+                        </div>
+                        <div class="external-service">
+                            🥈 Alpha Vantage<br>
+                            <span style="font-size:0.8rem;color:#6b7280;">美股数据</span>
+                        </div>
+                        <div class="external-service">
+                            🥉 新浪财经<br>
+                            <span style="font-size:0.8rem;color:#6b7280;">A 股/港股</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 图例 -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e0e7ff; border-color: #4f46e5;"></div>
+                <span>表现层</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #fef3c7; border-color: #f59e0b;"></div>
+                <span>应用层</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #d1fae5; border-color: #10b981;"></div>
+                <span>业务层</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #fee2e2; border-color: #ef4444;"></div>
+                <span>数据访问层</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f3f4f6; border-color: #6b7280;"></div>
+                <span>基础设施</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ede9fe; border-color: #8b5cf6;"></div>
+                <span>外部服务</span>
+            </div>
+        </div>
+        
+        <!-- 技术栈详情 -->
+        <div class="tech-stack">
+            <div class="stack-column">
+                <h3>🚀 后端技术栈</h3>
+                <ul class="stack-list">
+                    <li>Java 17 / Spring Boot 3.x</li>
+                    <li>Spring Data JPA / Hibernate</li>
+                    <li>MySQL 8.0 数据库</li>
+                    <li>SpringDoc OpenAPI (Swagger)</li>
+                    <li>RestClient (HTTP 客户端)</li>
+                    <li>Lombok (代码简化)</li>
+                </ul>
+            </div>
+            <div class="stack-column">
+                <h3>💻 前端技术栈</h3>
+                <ul class="stack-list">
+                    <li>Vue 3 (Composition API)</li>
+                    <li>Vite (构建工具)</li>
+                    <li>Vue Router (路由管理)</li>
+                    <li>Vue I18n (国际化)</li>
+                    <li>Axios (HTTP 请求)</li>
+                    <li>CSS3 / SVG (图表绘制)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 架构特点说明 -->
+        <div class="responsive-note">
+            <h4 style="color: #1e40af; margin-bottom: 10px; font-size: 1.1rem;">📋 架构设计特点</h4>
+            <p>
+                <strong>✅ 分层清晰：</strong>严格遵循前后端分离 + 后端五层架构，职责明确<br>
+                <strong>✅ 高可用性：</strong>多源故障转移 + 内存缓存，确保服务稳定性<br>
+                <strong>✅ 可扩展性：</strong>模块化设计，支持未来添加 Redis、WebSocket 等增强功能<br>
+                <strong>✅ 易维护性：</strong>标准化 RESTful API + Swagger 文档，降低协作成本
+            </p>
+        </div>
+    </div>
+</body>
+</html>

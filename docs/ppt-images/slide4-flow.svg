@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+  <defs>
+    <linearGradient id="flowGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0e7ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c7d2fe;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="flowGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fef3c7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fde68a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="flowGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#d1fae5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a7f3d0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Title -->
+  <text x="480" y="50" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a1a">实施思路 - 三阶段递进</text>
+  <text x="480" y="75" text-anchor="middle" font-size="16" fill="#6b7280">Slide 4 · 投资组合管理系统</text>
+  
+  <!-- Phase 1 -->
+  <g transform="translate(480, 160)">
+    <rect x="-320" y="-60" width="640" height="120" rx="15" fill="url(#flowGrad1)" stroke="#4f46e5" stroke-width="3"/>
+    <text x="0" y="-25" text-anchor="middle" font-size="22" font-weight="bold" fill="#1e40af">🎯 主链路建设</text>
+    <text x="0" y="10" text-anchor="middle" font-size="15" fill="#1e3a8a">组合/持仓管理 · 估值摘要计算 · 分析展示</text>
+  </g>
+  
+  <!-- Arrow 1 -->
+  <g transform="translate(480, 270)">
+    <polygon points="0,0 -15,-10 -15,-5 0,-5 0,5 -15,5 -15,10" fill="#4f46e5"/>
+    <text x="30" y="6" font-size="14" fill="#6b7280">阶段推进</text>
+  </g>
+  
+  <!-- Phase 2 -->
+  <g transform="translate(480, 320)">
+    <rect x="-320" y="-60" width="640" height="120" rx="15" fill="url(#flowGrad2)" stroke="#f59e0b" stroke-width="3"/>
+    <text x="0" y="-25" text-anchor="middle" font-size="22" font-weight="bold" fill="#92400e">🛡️ 可靠性增强</text>
+    <text x="0" y="10" text-anchor="middle" font-size="15" fill="#78350f">多源缓存 · 故障转移 · 降级策略</text>
+  </g>
+  
+  <!-- Arrow 2 -->
+  <g transform="translate(480, 430)">
+    <polygon points="0,0 -15,-10 -15,-5 0,-5 0,5 -15,5 -15,10" fill="#f59e0b"/>
+    <text x="30" y="6" font-size="14" fill="#6b7280">阶段推进</text>
+  </g>
+  
+  <!-- Phase 3 -->
+  <g transform="translate(480, 480)">
+    <rect x="-320" y="-60" width="640" height="120" rx="15" fill="url(#flowGrad3)" stroke="#10b981" stroke-width="3"/>
+    <text x="0" y="-25" text-anchor="middle" font-size="22" font-weight="bold" fill="#065f46">⚙️ 工程化交付</text>
+    <text x="0" y="10" text-anchor="middle" font-size="15" fill="#064e3b">Swagger 文档 · 配置化 · 健康检查</text>
+  </g>
+</svg>

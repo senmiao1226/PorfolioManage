@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+  <defs>
+    <linearGradient id="timelineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="day1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0e7ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c7d2fe;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Title -->
+  <text x="480" y="50" text-anchor="middle" font-size="28" font-weight="bold" fill="#1a1a1a">项目背景 - 4 天敏捷开发时间轴</text>
+  <text x="480" y="75" text-anchor="middle" font-size="16" fill="#6b7280">Slide 3 · 投资组合管理系统</text>
+  
+  <!-- Timeline line -->
+  <line x1="100" y1="270" x2="860" y2="270" stroke="url(#timelineGrad)" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Day 1 -->
+  <g transform="translate(195, 270)">
+    <circle cx="0" cy="0" r="35" fill="white" stroke="#4f46e5" stroke-width="4"/>
+    <text x="0" y="6" text-anchor="middle" font-size="24" font-weight="bold" fill="#4f46e5">①</text>
+    <rect x="-60" y="-90" width="120" height="35" rx="17.5" fill="#4f46e5"/>
+    <text x="0" y="-67" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Day 1</text>
+    <text x="0" y="-40" text-anchor="middle" font-size="13" fill="#374151">环境搭建</text>
+    <text x="0" y="-22" text-anchor="middle" font-size="13" fill="#374151">项目初始化</text>
+  </g>
+  
+  <!-- Day 2 -->
+  <g transform="translate(385, 270)">
+    <circle cx="0" cy="0" r="35" fill="white" stroke="#4f46e5" stroke-width="4"/>
+    <text x="0" y="6" text-anchor="middle" font-size="24" font-weight="bold" fill="#4f46e5">②</text>
+    <rect x="-60" y="55" width="120" height="35" rx="17.5" fill="#4f46e5"/>
+    <text x="0" y="78" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Day 2</text>
+    <text x="0" y="105" text-anchor="middle" font-size="13" fill="#374151">估值口径统一</text>
+    <text x="0" y="123" text-anchor="middle" font-size="13" fill="#374151">组合/持仓 CRUD</text>
+  </g>
+  
+  <!-- Day 3 -->
+  <g transform="translate(575, 270)">
+    <circle cx="0" cy="0" r="35" fill="white" stroke="#4f46e5" stroke-width="4"/>
+    <text x="0" y="6" text-anchor="middle" font-size="24" font-weight="bold" fill="#4f46e5">③</text>
+    <rect x="-60" y="-90" width="120" height="35" rx="17.5" fill="#4f46e5"/>
+    <text x="0" y="-67" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Day 3</text>
+    <text x="0" y="-40" text-anchor="middle" font-size="13" fill="#374151">行情多源聚合</text>
+    <text x="0" y="-22" text-anchor="middle" font-size="13" fill="#374151">故障转移实现</text>
+  </g>
+  
+  <!-- Day 4 -->
+  <g transform="translate(765, 270)">
+    <circle cx="0" cy="0" r="35" fill="white" stroke="#4f46e5" stroke-width="4"/>
+    <text x="0" y="6" text-anchor="middle" font-size="24" font-weight="bold" fill="#4f46e5">④</text>
+    <rect x="-60" y="55" width="120" height="35" rx="17.5" fill="#4f46e5"/>
+    <text x="0" y="78" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Day 4</text>
+    <text x="0" y="105" text-anchor="middle" font-size="13" fill="#374151">分析可视化</text>
+    <text x="0" y="123" text-anchor="middle" font-size="13" fill="#374151">业绩统计展示</text>
+  </g>
+</svg>
