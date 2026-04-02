@@ -25,16 +25,66 @@ public class MarketService {
     private final HoldingRepository holdingRepository;
     private final PortfolioRepository portfolioRepository;
 
-    // 预定义热门美股列表
-    private static final List<String> POPULAR_US_STOCKS = List.of(
-            "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META",
-            "NFLX", "AMD", "INTC", "CRM", "ADBE", "PYPL", "UBER",
-            "BABA", "JD", "PDD", "NIO", "LI", "XPEV"
+    // 预定义热门美股列表 - 使用固定价格避免API调用
+    // 按市值/知名度排序：大市值美股在前，中概股在后
+    private static final Map<String, Double> POPULAR_STOCK_PRICES = Map.ofEntries(
+            // 大市值美股 (USD)
+            Map.entry("AAPL", 175.50),
+            Map.entry("MSFT", 420.75),
+            Map.entry("GOOGL", 165.20),
+            Map.entry("AMZN", 185.30),
+            Map.entry("NVDA", 890.15),
+            Map.entry("META", 505.40),
+            Map.entry("TSLA", 245.60),
+            Map.entry("NFLX", 625.80),
+            Map.entry("AMD", 165.25),
+            Map.entry("CRM", 295.60),
+            Map.entry("ADBE", 525.30),
+            Map.entry("INTC", 32.45),
+            Map.entry("PYPL", 68.40),
+            Map.entry("UBER", 78.90),
+            // 中概股 (CNY)
+            Map.entry("BABA", 72.50),
+            Map.entry("JD", 28.30),
+            Map.entry("PDD", 145.60),
+            Map.entry("NIO", 4.85),
+            Map.entry("LI", 32.15),
+            Map.entry("XPEV", 9.75)
     );
 
-    // 预定义指数列表
-    private static final List<String> MARKET_INDEXES = List.of(
-            "SPY", "QQQ", "DIA", "IWM"
+    // 中概股代码集合（用于判断货币类型）
+    private static final Set<String> CHINESE_STOCKS = Set.of("BABA", "JD", "PDD", "NIO", "LI", "XPEV");
+
+    // 股票代码对应的公司名称
+    private static final Map<String, String> STOCK_NAMES = Map.ofEntries(
+            Map.entry("AAPL", "Apple Inc."),
+            Map.entry("MSFT", "Microsoft Corp."),
+            Map.entry("GOOGL", "Alphabet Inc."),
+            Map.entry("AMZN", "Amazon.com Inc."),
+            Map.entry("TSLA", "Tesla Inc."),
+            Map.entry("NVDA", "NVIDIA Corp."),
+            Map.entry("META", "Meta Platforms Inc."),
+            Map.entry("NFLX", "Netflix Inc."),
+            Map.entry("AMD", "Advanced Micro Devices"),
+            Map.entry("INTC", "Intel Corp."),
+            Map.entry("CRM", "Salesforce Inc."),
+            Map.entry("ADBE", "Adobe Inc."),
+            Map.entry("PYPL", "PayPal Holdings Inc."),
+            Map.entry("UBER", "Uber Technologies Inc."),
+            Map.entry("BABA", "Alibaba Group"),
+            Map.entry("JD", "JD.com Inc."),
+            Map.entry("PDD", "PDD Holdings Inc."),
+            Map.entry("NIO", "NIO Inc."),
+            Map.entry("LI", "Li Auto Inc."),
+            Map.entry("XPEV", "XPeng Inc.")
+    );
+
+    // 预定义指数列表 - 使用固定价格
+    private static final Map<String, Double> INDEX_PRICES = Map.of(
+            "SPY", 520.40,
+            "QQQ", 445.30,
+            "DIA", 390.25,
+            "IWM", 205.60
     );
 
     /**
@@ -91,26 +141,43 @@ public class MarketService {
     }
 
     /**
-     * 获取热门股票行情
+     * 获取热门股票行情 - 使用固定价格，不调用API
      *
      * @return 热门股票价格列表
      */
     public List<MarketPriceDto> getPopularStocks() {
-        return POPULAR_US_STOCKS.stream()
-                .map(this::getStockPrice)
-                .filter(Objects::nonNull)
+        System.out.println("[MarketService] 返回固定价格的热门股票数据（无API调用）");
+        return POPULAR_STOCK_PRICES.entrySet().stream()
+                .map(entry -> {
+                    String ticker = entry.getKey();
+                    String name = STOCK_NAMES.getOrDefault(ticker, ticker);
+                    String currency = CHINESE_STOCKS.contains(ticker) ? "CNY" : "USD";
+                    return new MarketPriceDto(
+                            ticker,
+                            name,
+                            entry.getValue(),
+                            currency,
+                            Instant.now()
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
     /**
-     * 获取市场指数行情
+     * 获取市场指数行情 - 使用固定价格，不调用API
      *
      * @return 指数价格列表
      */
     public List<MarketPriceDto> getMarketIndexes() {
-        return MARKET_INDEXES.stream()
-                .map(this::getStockPrice)
-                .filter(Objects::nonNull)
+        System.out.println("[MarketService] 返回固定价格的指数数据（无API调用）");
+        return INDEX_PRICES.entrySet().stream()
+                .map(entry -> new MarketPriceDto(
+                        entry.getKey(),
+                        entry.getKey(),
+                        entry.getValue(),
+                        "Hardcoded",
+                        Instant.now()
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -205,35 +272,116 @@ public class MarketService {
     }
 
     /**
-     * 获取涨跌排行（基于持仓）
+     * 获取涨跌排行（基于持仓的未实现盈亏）
      *
      * @param portfolioId 组合ID
      * @param topN 取前N个
-     * @param gainers true-涨幅榜, false-跌幅榜
-     * @return 排行列表
+     * @param gainers true-盈利榜, false-亏损榜
+     * @return 排行列表（按未实现盈亏排序）
      */
     public List<MarketDtos.MarketMoverDto> getMarketMovers(Long portfolioId, int topN, boolean gainers) {
-        List<MarketPriceWithHoldingDto> holdings = getHoldingsMarketData(portfolioId);
+        System.out.println("\n[MarketService.getMarketMovers] 开始 | portfolioId=" + portfolioId + ", gainers=" + gainers);
+        
+        // 获取该组合的所有持仓
+        List<Holding> holdings = holdingRepository.findByPortfolioIdOrderById(portfolioId);
+        System.out.println("[DEBUG] 获取到持仓记录数：" + holdings.size());
+        
+        // 按股票代码分组
+        Map<String, List<Holding>> holdingsByTicker = holdings.stream()
+                .filter(h -> h.getAssetType() != AssetType.cash)
+                .filter(h -> h.getTicker() != null && !h.getTicker().isBlank())
+                .collect(Collectors.groupingBy(h -> h.getTicker().trim().toUpperCase()));
+        
+        System.out.println("[DEBUG] 去重后的股票数量：" + holdingsByTicker.size());
 
-        return holdings.stream()
-                .filter(h -> h.currentPrice() != null && h.priceChangePercent() != null)
+        // 计算每支股票的未实现盈亏
+        List<MarketDtos.MarketMoverDto> movers = holdingsByTicker.entrySet().stream()
+                .map(entry -> calculateUnrealizedPnl(entry.getKey(), entry.getValue()))
+                .filter(Objects::nonNull)
+                .filter(m -> m.unrealizedPnl() != null) // 只保留有盈亏数据的股票
                 .sorted((a, b) -> {
+                    double pnlA = a.unrealizedPnl() != null ? a.unrealizedPnl() : 0.0;
+                    double pnlB = b.unrealizedPnl() != null ? b.unrealizedPnl() : 0.0;
                     if (gainers) {
-                        return Double.compare(b.priceChangePercent(), a.priceChangePercent());
+                        return Double.compare(pnlB, pnlA); // 盈利从高到低
                     } else {
-                        return Double.compare(a.priceChangePercent(), b.priceChangePercent());
+                        return Double.compare(pnlA, pnlB); // 亏损从低到高（最负的在前）
                     }
                 })
                 .limit(topN)
-                .map(h -> new MarketDtos.MarketMoverDto(
-                        h.ticker(),
-                        h.name(),
-                        h.currentPrice(),
-                        h.priceChange(),
-                        h.priceChangePercent(),
-                        h.priceChangePercent() >= 0 ? "UP" : "DOWN"
-                ))
                 .collect(Collectors.toList());
+        
+        System.out.println("[MarketService.getMarketMovers] 完成 | 返回记录数=" + movers.size());
+        return movers;
+    }
+
+    /**
+     * 计算股票的未实现盈亏
+     */
+    private MarketDtos.MarketMoverDto calculateUnrealizedPnl(String ticker, List<Holding> holdings) {
+        if (holdings.isEmpty()) {
+            return null;
+        }
+
+        // 汇总持仓数量和成本
+        double totalQuantity = holdings.stream()
+                .mapToDouble(Holding::getQuantity)
+                .sum();
+        
+        double totalCost = holdings.stream()
+                .mapToDouble(h -> h.getQuantity() * h.getAverageCost())
+                .sum();
+
+        // 获取股票名称
+        String name = holdings.stream()
+                .map(Holding::getName)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(ticker);
+
+        // 获取当前价格
+        Optional<Double> priceOpt = pricingService.priceForHolding(AssetType.stock, ticker);
+        Optional<Double> prevCloseOpt = pricingService.fetchPreviousClose(AssetType.stock, ticker);
+
+        if (priceOpt.isEmpty()) {
+            System.out.println("[DEBUG] " + ticker + " 未获取到当前价格，跳过");
+            return null;
+        }
+
+        Double currentPrice = priceOpt.get();
+        Double totalValue = currentPrice * totalQuantity;
+        
+        // 计算未实现盈亏
+        Double unrealizedPnl = totalValue - totalCost;
+        Double unrealizedPnlPercent = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0.0;
+        
+        // 计算当日涨跌
+        Double priceChange = 0.0;
+        Double priceChangePercent = 0.0;
+        if (prevCloseOpt.isPresent() && prevCloseOpt.get() > 0) {
+            Double previousClose = prevCloseOpt.get();
+            priceChange = currentPrice - previousClose;
+            priceChangePercent = (priceChange / previousClose) * 100;
+        }
+        
+        String trend = unrealizedPnl >= 0 ? "UP" : "DOWN";
+
+        System.out.println("[DEBUG] " + ticker + " | 持仓=" + totalQuantity + ", 成本=" + round2(totalCost) + 
+                ", 市值=" + round2(totalValue) + ", 盈亏=" + round2(unrealizedPnl) + " (" + round2(unrealizedPnlPercent) + "%)");
+
+        return new MarketDtos.MarketMoverDto(
+                ticker,
+                name,
+                currentPrice,
+                round2(priceChange),
+                round2(priceChangePercent),
+                trend,
+                round2(unrealizedPnl),
+                round2(unrealizedPnlPercent),
+                round2(totalCost),
+                round2(totalValue),
+                totalQuantity
+        );
     }
 
     /**

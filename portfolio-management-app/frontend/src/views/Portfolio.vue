@@ -95,9 +95,11 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="h in summary.holdings" :key="h.holdingId">
+              <tr v-for="h in summary.holdings" :key="h.holdingId" 
+                  :class="{ 'clickable': h.ticker && h.assetType !== 'cash' }"
+                  @click="h.ticker && h.assetType !== 'cash' ? showStockHistory(h.ticker) : null">
                 <td>{{ formatAssetType(h.assetType) }}</td>
-                <td>{{ h.ticker || '—' }}</td>
+                <td class="ticker-cell">{{ h.ticker || '—' }}</td>
                 <td>{{ h.quantity }}</td>
                 <td>{{ fmtMoney(h.costBasis / h.quantity) }}</td>
                 <td>{{ h.marketPrice ? fmtMoney(h.marketPrice) : '—' }}</td>
@@ -105,7 +107,7 @@
                 <td :class="{ 'positive': (h.unrealizedPnl || 0) >= 0, 'negative': (h.unrealizedPnl || 0) < 0 }">
                   {{ h.unrealizedPnl != null ? fmtMoney(h.unrealizedPnl) : '—' }}
                 </td>
-                <td>
+                <td @click.stop>
                   <button class="btn-small" @click="editHolding(h)">{{ t('common.edit') }}</button>
                   <button class="btn-small btn-danger" @click="deleteHolding(h.holdingId)">{{ t('common.delete') }}</button>
                 </td>
@@ -118,6 +120,85 @@
 
       <section v-else class="card empty-card">
         <p>{{ t('portfolio.selectPortfolio') }}</p>
+      </section>
+
+      <!-- 股票历史走势 -->
+      <section v-if="selectedStockTicker" class="card stock-history-card">
+        <div class="card-header">
+          <h2>{{ selectedStockTicker.toUpperCase() }} {{ t('portfolio.priceHistory') || '历史走势' }}</h2>
+          <button class="btn-icon close-btn" @click="closeStockHistory">✕</button>
+        </div>
+        
+        <!-- 时间范围选择器 -->
+        <div class="time-selector">
+          <button 
+            v-for="option in timeRangeOptions" 
+            :key="option.days"
+            :class="{ active: selectedStockDays === option.days }"
+            @click="changeStockDays(option.days)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+
+        <!-- 股票走势图 -->
+        <div v-if="stockHistoryLoading" class="loading">
+          <div class="spinner"></div>
+          <span>{{ t('common.loading') }}</span>
+        </div>
+        <div v-else-if="stockHistoryData?.length && stockHistoryData.length >= 2" class="chart-container">
+          <div class="chart-header">
+            <span class="data-points">{{ stockHistoryData.length }} 个数据点</span>
+          </div>
+          <div class="chart-area">
+            <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none">
+              <!-- 网格线 -->
+              <line v-for="i in 5" :key="'h'+i"
+                :x1="0" :y1="chartHeight * i / 5" 
+                :x2="chartWidth" :y2="chartHeight * i / 5"
+                stroke="#f3f4f6" stroke-width="1"
+              />
+              <!-- 折线 -->
+              <polyline
+                v-if="stockChartPoints"
+                :points="stockChartPoints"
+                fill="none"
+                stroke="#4f46e5"
+                stroke-width="2"
+              />
+              <!-- 数据点 -->
+              <circle
+                v-for="(point, idx) in stockChartPointsArray"
+                :key="idx"
+                :cx="point.x"
+                :cy="point.y"
+                r="3"
+                fill="#4f46e5"
+              />
+            </svg>
+          </div>
+          <div class="chart-info">
+            <div class="info-item">
+              <span>{{ t('analytics.highest') }}:</span>
+              <span class="positive">{{ fmtMoney(stockMaxValue) }}</span>
+            </div>
+            <div class="info-item">
+              <span>{{ t('analytics.lowest') }}:</span>
+              <span class="negative">{{ fmtMoney(stockMinValue) }}</span>
+            </div>
+            <div class="info-item">
+              <span>{{ t('analytics.average') }}:</span>
+              <span>{{ fmtMoney(stockAvgValue) }}</span>
+            </div>
+            <div class="info-item">
+              <span>{{ t('analytics.change') || '涨跌幅' }}:</span>
+              <span :class="stockChangePercent >= 0 ? 'positive' : 'negative'">
+                {{ fmtPercent(stockChangePercent) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <p v-else class="empty">{{ stockHistoryError || t('analytics.noStockData') || '暂无数据' }}</p>
       </section>
     </div>
 
@@ -191,7 +272,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '../api';
 import { t } from '../locales';
@@ -202,6 +283,32 @@ const loading = ref(false);
 const portfolios = ref([]);
 const selectedPortfolio = ref(null);
 const summary = ref(null);
+
+// 股票历史走势相关
+const selectedStockTicker = ref('');
+const selectedStockDays = ref(30);
+const stockHistoryData = ref([]); // 当前显示的数据（根据选择的时间范围过滤）
+const stockHistoryLoading = ref(false);
+const stockHistoryError = ref('');
+
+// 缓存一整年的数据，避免重复API调用
+const stockHistoryCache = ref({
+  ticker: '',
+  fullData: [], // 存储一整年的数据
+  lastFetchTime: null
+});
+
+// 时间范围选项
+const timeRangeOptions = [
+  { days: 30, label: '30天' },
+  { days: 180, label: '半年' },
+  { days: 365, label: '一年' }
+];
+
+// 图表配置
+const chartWidth = 800;
+const chartHeight = 300;
+const padding = { top: 20, right: 20, bottom: 30, left: 60 };
 
 // 弹窗状态
 const showCreateModal = ref(false);
@@ -227,9 +334,14 @@ function fmtMoney(v) {
   if (v == null || Number.isNaN(Number(v))) return '—';
   return new Intl.NumberFormat('zh-CN', { 
     style: 'currency', 
-    currency: selectedPortfolio.value?.baseCurrency || 'USD',
+    currency: 'USD',
     maximumFractionDigits: 2 
   }).format(Number(v));
+}
+
+function fmtPercent(v) {
+  if (v == null || Number.isNaN(Number(v))) return '—';
+  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
 }
 
 function formatAssetType(type) {
@@ -461,6 +573,170 @@ async function deleteHolding(id) {
 
 onMounted(() => {
   loadPortfolios();
+});
+
+// ========== 股票历史走势功能 ==========
+
+// 显示股票历史走势
+async function showStockHistory(ticker) {
+  selectedStockTicker.value = ticker;
+  selectedStockDays.value = 30; // 默认30天
+  await loadStockHistory(true); // true = 强制刷新，获取完整一年数据
+}
+
+// 关闭股票历史走势
+function closeStockHistory() {
+  selectedStockTicker.value = '';
+  stockHistoryData.value = [];
+  stockHistoryError.value = '';
+  // 清空缓存
+  stockHistoryCache.value = {
+    ticker: '',
+    fullData: [],
+    lastFetchTime: null
+  };
+}
+
+// 加载个股历史数据
+// forceRefresh: 是否强制从API获取新数据（首次打开或切换股票时）
+async function loadStockHistory(forceRefresh = false) {
+  if (!selectedStockTicker.value.trim()) {
+    stockHistoryError.value = '请输入股票代码';
+    return;
+  }
+  
+  const ticker = selectedStockTicker.value.trim().toUpperCase();
+  
+  // 检查缓存：如果是同一支股票且缓存中有数据，且不需要强制刷新
+  if (!forceRefresh && 
+      stockHistoryCache.value.ticker === ticker && 
+      stockHistoryCache.value.fullData.length > 0) {
+    console.log('使用缓存数据，无需API调用');
+    filterDataByTimeRange();
+    return;
+  }
+  
+  stockHistoryLoading.value = true;
+  stockHistoryError.value = '';
+  
+  try {
+    // 始终获取一整年的数据（365天）
+    console.log('从API获取一整年数据...');
+    const response = await api.getStockHistory(ticker, 365);
+    
+    console.log('Stock history response:', response);
+    
+    if (response.found && response.data && response.data.length > 0) {
+      // 转换数据格式并缓存完整数据
+      const fullData = response.data.map(d => ({
+        date: d.date,
+        value: d.price
+      }));
+      
+      // 更新缓存
+      stockHistoryCache.value = {
+        ticker: ticker,
+        fullData: fullData,
+        lastFetchTime: new Date()
+      };
+      
+      console.log('完整数据已缓存:', fullData.length, 'points');
+      
+      // 根据当前选择的时间范围过滤数据
+      filterDataByTimeRange();
+    } else {
+      console.log('No data found:', response);
+      stockHistoryData.value = [];
+      stockHistoryCache.value.fullData = [];
+      stockHistoryError.value = response.message || '未找到该股票的历史数据';
+    }
+  } catch (e) {
+    console.error('加载个股历史数据失败:', e);
+    stockHistoryError.value = e.message || '加载失败，请稍后重试';
+    stockHistoryData.value = [];
+  } finally {
+    stockHistoryLoading.value = false;
+  }
+}
+
+// 根据时间范围过滤缓存的数据
+function filterDataByTimeRange() {
+  const fullData = stockHistoryCache.value.fullData;
+  if (!fullData || fullData.length === 0) {
+    stockHistoryData.value = [];
+    return;
+  }
+  
+  const days = selectedStockDays.value;
+  
+  // 如果选择的是一年，显示全部数据
+  if (days >= 365) {
+    stockHistoryData.value = fullData;
+    console.log('显示全部数据:', fullData.length, 'points');
+    return;
+  }
+  
+  // 计算需要保留的数据点数量（取最近N天）
+  // 数据是按日期升序排列的，所以取最后N个
+  const dataPointsNeeded = Math.min(days, fullData.length);
+  const filteredData = fullData.slice(-dataPointsNeeded);
+  
+  stockHistoryData.value = filteredData;
+  console.log(`显示最近${days}天数据:`, filteredData.length, 'points (从缓存过滤)');
+}
+
+// 切换时间范围 - 只过滤缓存数据，不发送新API请求
+function changeStockDays(days) {
+  selectedStockDays.value = days;
+  // 从缓存中过滤数据，不发送新请求
+  filterDataByTimeRange();
+}
+
+// 个股走势图计算
+const stockChartPointsArray = computed(() => {
+  if (!stockHistoryData.value?.length || stockHistoryData.value.length < 2) return [];
+  
+  const values = stockHistoryData.value.map(d => d.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  
+  const usableWidth = chartWidth - padding.left - padding.right;
+  const usableHeight = chartHeight - padding.top - padding.bottom;
+  const dataLength = stockHistoryData.value.length;
+  
+  return stockHistoryData.value.map((d, i) => ({
+    x: padding.left + (usableWidth * i / (dataLength - 1)),
+    y: chartHeight - padding.bottom - (usableHeight * (d.value - min) / range)
+  }));
+});
+
+const stockChartPoints = computed(() => {
+  return stockChartPointsArray.value.map(p => `${p.x},${p.y}`).join(' ');
+});
+
+const stockMaxValue = computed(() => {
+  if (!stockHistoryData.value?.length) return 0;
+  return Math.max(...stockHistoryData.value.map(d => d.value));
+});
+
+const stockMinValue = computed(() => {
+  if (!stockHistoryData.value?.length) return 0;
+  return Math.min(...stockHistoryData.value.map(d => d.value));
+});
+
+const stockAvgValue = computed(() => {
+  if (!stockHistoryData.value?.length) return 0;
+  const sum = stockHistoryData.value.reduce((acc, d) => acc + d.value, 0);
+  return sum / stockHistoryData.value.length;
+});
+
+// 计算涨跌幅
+const stockChangePercent = computed(() => {
+  if (!stockHistoryData.value?.length || stockHistoryData.value.length < 2) return 0;
+  const first = stockHistoryData.value[0].value;
+  const last = stockHistoryData.value[stockHistoryData.value.length - 1].value;
+  return ((last - first) / first) * 100;
 });
 </script>
 
@@ -772,5 +1048,128 @@ onMounted(() => {
   .summary-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 股票历史走势样式 */
+.stock-history-card {
+  grid-column: 1 / -1;
+  margin-top: 1rem;
+}
+
+.close-btn {
+  font-size: 1.25rem;
+  color: #666;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.chart-header {
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.data-points {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.time-selector {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.time-selector button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.time-selector button.active {
+  background: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+}
+
+.chart-container {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.chart-area {
+  flex: 1;
+  height: 300px;
+}
+
+.chart-area svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 150px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+/* 持仓列表可点击样式 */
+.data-table tbody tr.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.data-table tbody tr.clickable:hover {
+  background-color: #f3f4f6;
+}
+
+.ticker-cell {
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #e5e5e5;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+}
+
+.positive {
+  color: #10b981;
+}
+
+.negative {
+  color: #ef4444;
 }
 </style>

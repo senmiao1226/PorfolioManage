@@ -68,15 +68,20 @@ public final class MarketDtos {
     ) {}
 
     /**
-     * 市场热门股票
+     * 市场热门股票 - 基于持仓盈亏的涨跌排行
      */
     public record MarketMoverDto(
             String ticker,
             String name,
             Double currentPrice,
-            Double priceChange,
-            Double priceChangePercent,
-            String trend  // "UP", "DOWN", "FLAT"
+            Double priceChange,        // 当日价格变动
+            Double priceChangePercent, // 当日涨跌幅
+            String trend,              // "UP", "DOWN", "FLAT"
+            Double unrealizedPnl,      // 未实现盈亏（基于成本价）
+            Double unrealizedPnlPercent, // 未实现盈亏百分比
+            Double totalCost,          // 总成本
+            Double totalValue,         // 总市值
+            Double holdingQuantity     // 持仓数量
     ) {}
 
     /**

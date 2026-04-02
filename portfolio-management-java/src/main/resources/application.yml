@@ -13,7 +13,7 @@ spring:
     # characterEncoding 须为 UTF-8（库字符集仍可用 utf8mb4，见 sql/init_portfolio_db.sql）
     url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:portfolio_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:root}
+    password: ${MYSQL_PASSWORD:Ms20021226}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:

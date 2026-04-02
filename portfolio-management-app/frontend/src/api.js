@@ -104,4 +104,7 @@ export const api = {
   getPerformanceStats: (portfolioId) => req(`/analytics/performance/${portfolioId}`),
   getGlobalPerformanceStats: () => req("/analytics/performance/global"),
   getTopHoldings: (portfolioId, topN = 10) => req(`/analytics/top-holdings/${portfolioId}?topN=${topN}`),
+  
+  // 个股历史价格走势
+  getStockHistory: (ticker, days = 30) => req(`/market/history/${ticker}?days=${days}`),
 };

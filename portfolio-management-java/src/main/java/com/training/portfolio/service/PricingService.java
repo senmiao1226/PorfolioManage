@@ -18,6 +18,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
@@ -136,6 +137,66 @@ public class PricingService {
         return "unknown";
     }
 
+    /**
+     * 判断股票类型
+     * - 中概股/A股：纯数字 6位(sh/sz) 或 4-5位(hk) 或带前缀 SH/SZ/HK
+     * - 美股：字母组成，通常1-5个字母
+     */
+    private StockType detectStockType(String ticker) {
+        String t = ticker.trim().toUpperCase();
+        
+        // A股：6位数字 或 SH/SZ开头+6位数字
+        if (t.matches("^\\d{6}$") || t.matches("^(SH|SZ)\\d{6}$")) {
+            return StockType.A_SHARE;
+        }
+        
+        // 港股：4-5位数字 或 HK开头+4-5位数字
+        if (t.matches("^\\d{4,5}$") || t.matches("^HK\\d{4,5}$")) {
+            return StockType.HK_STOCK;
+        }
+        
+        // 中概股：在美股上市的中国公司（通过常见代码识别）
+        // 这些股票在Massive API中可能也能查到，但我们可以优先尝试其他源
+        Set<String> chineseConceptStocks = Set.of(
+            "BABA", "JD", "PDD", "NIO", "LI", "XPEV", "BEKE", "ZTO", "TME", 
+            "BILI", "IQ", "YY", "VIPS", "FUTU", "TIGR", "DADA", "YMM"
+        );
+        if (chineseConceptStocks.contains(t)) {
+            return StockType.CHINESE_CONCEPT;
+        }
+        
+        // 默认美股
+        return StockType.US_STOCK;
+    }
+    
+    private enum StockType {
+        US_STOCK,      // 美股
+        A_SHARE,       // A股
+        HK_STOCK,      // 港股
+        CHINESE_CONCEPT // 中概股（美股上市的中国公司）
+    }
+    
+    /**
+     * 根据股票类型获取适用的数据源列表
+     * 避免所有股票都尝试Massive API，节省API调用次数
+     */
+    private String[] getProvidersForStockType(StockType type) {
+        switch (type) {
+            case US_STOCK:
+                // 美股：优先使用Massive（专业美股数据）
+                return new String[]{"massive", "alpha-vantage", "cached"};
+            case CHINESE_CONCEPT:
+                // 中概股：可以尝试多个源，但优先非Massive
+                return new String[]{"cached", "alpha-vantage", "massive"};
+            case A_SHARE:
+            case HK_STOCK:
+                // A股/港股：使用Sina（国内数据源），完全不调用Massive
+                return new String[]{"sina", "cached"};
+            default:
+                return new String[]{"cached"};
+        }
+    }
+
     public Optional<Double> priceForHolding(AssetType assetType, String ticker) {
         String caller = getCallerInfo();
         
@@ -161,15 +222,18 @@ public class PricingService {
             return Optional.ofNullable(cached.value);
         }
         
-        String[] providers = appProperties.getPricing().getProviders().split(",");
+        // 检测股票类型并选择合适的数据源
+        StockType stockType = detectStockType(t);
+        String[] providers = getProvidersForStockType(stockType);
         
         System.out.println("\n========== [PricingService.priceForHolding] ← 被 [" + caller + "] 调用 ==========");
         System.out.println("[DEBUG] 股票：" + t);
+        System.out.println("[DEBUG] 检测到股票类型：" + stockType);
+        System.out.println("[DEBUG] 使用数据源优先级：" + String.join(" > ", providers));
         System.out.println("[DEBUG] 缓存未命中，开始查询API");
-        System.out.println("[DEBUG] 数据源优先级：" + String.join(" > ", providers));
         System.out.println("=================================================================\n");
         
-        // 按优先级尝试各个数据源
+        // 按股票类型选择的数据源尝试
         for (String provider : providers) {
             System.out.println("[DEBUG] 尝试数据源 [" + provider.trim() + "]...");
             
@@ -1072,5 +1136,83 @@ public class PricingService {
         System.out.println("=======================================\n");
         
         return Optional.of(convertedPrice);
+    }
+
+    /**
+     * 获取股票历史价格数据（用于图表展示）
+     * 使用 Massive API v2: /v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}
+     *
+     * @param ticker 股票代码
+     * @param from 开始日期
+     * @param to 结束日期
+     * @return 历史价格数据列表 (date, price)
+     */
+    public List<TimePrice> fetchStockHistoricalSeries(String ticker, LocalDate from, LocalDate to) {
+        String t = ticker.toUpperCase();
+        String apiKey = appProperties.getPricing().getMassiveApiKey();
+
+        // Massive API v2 格式: /v2/aggs/ticker/AAPL/range/1/day/2025-11-03/2025-11-28
+        String url = String.format(
+            "https://api.massive.com/v2/aggs/ticker/%s/range/1/day/%s/%s?adjusted=true&sort=asc&limit=500&apiKey=%s",
+            t, from.toString(), to.toString(), apiKey
+        );
+
+        System.out.println("\n========== [股票历史数据查询 - Massive API v2] ==========");
+        System.out.println("[DEBUG] 股票: " + t);
+        System.out.println("[DEBUG] 日期范围: " + from + " 至 " + to);
+        System.out.println("[DEBUG] URL: " + url);
+        System.out.println("=======================================================\n");
+
+        try {
+            String body = restClient.get()
+                .uri(url)
+                .header("accept", "application/json")
+                .retrieve()
+                .body(String.class);
+
+            if (body == null || body.isBlank()) {
+                System.out.println("[DEBUG] ✗ Massive API 返回空响应");
+                return List.of();
+            }
+
+            JsonNode root = objectMapper.readTree(body);
+
+            // 解析 Massive API v2 响应
+            // 格式: {"ticker": "AAPL", "resultsCount": 20, "results": [{"v": 70790813, "vw": 131.5, "o": 130.47, "c": 130.73, "h": 133.41, "l": 129.95, "t": 1673270400000, "n": 12345}, ...]}
+            if (root.has("results") && root.get("results").isArray()) {
+                JsonNode results = root.get("results");
+                List<TimePrice> series = new ArrayList<>();
+
+                for (JsonNode result : results) {
+                    if (result.has("c") && result.has("t")) {
+                        double closePrice = result.get("c").asDouble();
+                        long timestamp = result.get("t").asLong();
+                        // timestamp 是毫秒级 Unix 时间戳
+                        Instant instant = Instant.ofEpochMilli(timestamp);
+                        series.add(new TimePrice(instant, closePrice));
+                    }
+                }
+
+                System.out.println("[DEBUG] ✓ 获取到 " + series.size() + " 条历史数据");
+                System.out.println("=======================================================\n");
+                return series;
+            } else {
+                System.out.println("[DEBUG] ✗ 响应中没有 results 字段或为空");
+                if (root.has("error")) {
+                    System.out.println("[DEBUG] 错误信息: " + root.get("error").asText());
+                }
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException.TooManyRequests e) {
+            System.out.println("[DEBUG] ✗ Massive API 429 错误：请求频率超限");
+            System.out.println("[DEBUG] 建议：请稍后再试，或使用其他数据源");
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            System.out.println("[DEBUG] ✗ Massive API 400 错误：请求参数错误");
+            System.out.println("[DEBUG] 可能原因：日期范围无效或股票代码不存在");
+        } catch (Exception e) {
+            System.out.println("[DEBUG] ✗ Massive API 请求失败: " + e.getMessage());
+        }
+
+        System.out.println("=======================================================\n");
+        return List.of();
     }
 }

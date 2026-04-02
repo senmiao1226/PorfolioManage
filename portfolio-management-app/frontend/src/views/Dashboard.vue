@@ -54,6 +54,23 @@
         </div>
       </section>
 
+      <!-- 市场概览 -->
+      <section class="card">
+        <h2>{{ t('dashboard.marketOverview') || '市场概览' }}</h2>
+        <div v-if="marketIndexes?.length" class="market-indexes">
+          <div v-for="index in marketIndexes" :key="index.indexName" class="index-item">
+            <span class="index-name">{{ index.indexName }}</span>
+            <div class="index-info">
+              <span class="index-value">{{ fmtMoney(index.currentValue) }}</span>
+              <span class="index-change" :class="{ 'positive': index.trend === 'UP', 'negative': index.trend === 'DOWN' }">
+                {{ index.changePercent > 0 ? '+' : '' }}{{ index.changePercent?.toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+        <p v-else class="empty">{{ t('dashboard.noMarketData') || '暂无市场数据' }}</p>
+      </section>
+
       <!-- 资产分布 -->
       <section class="card">
         <h2>{{ t('dashboard.assetDistribution') }}</h2>
@@ -105,20 +122,6 @@
         <p v-else class="empty">{{ t('dashboard.noPortfolios') }}</p>
       </section>
 
-      <!-- 市场概览 -->
-      <section class="card">
-        <h2>{{ t('dashboard.marketOverview') }}</h2>
-        <div v-if="marketOverview?.length" class="market-indexes">
-          <div v-for="idx in marketOverview" :key="idx.indexName" class="index-item">
-            <span class="index-name">{{ idx.indexName }}</span>
-            <span class="index-value">{{ fmtMoney(idx.currentValue) }}</span>
-            <span class="index-change" :class="{ 'positive': idx.change >= 0, 'negative': idx.change < 0 }">
-              {{ idx.change >= 0 ? '+' : '' }}{{ fmtMoney(idx.change) }}
-            </span>
-          </div>
-        </div>
-        <p v-else class="empty">{{ t('dashboard.noMarketData') }}</p>
-      </section>
     </div>
   </div>
 </template>
@@ -136,7 +139,8 @@ const error = ref('');
 const summary = ref(null);
 const portfolios = ref([]);
 const assetDistribution = ref([]);
-const marketOverview = ref([]);
+const marketIndexes = ref([]);
+
 
 function fmtMoney(v) {
   if (v == null || Number.isNaN(Number(v))) return '—';
@@ -175,7 +179,7 @@ async function loadData() {
     summary.value = summaryRes;
     portfolios.value = portfoliosRes;
     assetDistribution.value = distributionRes;
-    marketOverview.value = marketRes;
+    marketIndexes.value = marketRes;
   } catch (e) {
     error.value = e.message || t('common.error');
   } finally {
@@ -444,13 +448,21 @@ onMounted(() => {
   color: #1a1a1a;
 }
 
+.index-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
 .index-value {
   font-family: monospace;
   color: #1a1a1a;
+  font-weight: 600;
 }
 
 .index-change {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 

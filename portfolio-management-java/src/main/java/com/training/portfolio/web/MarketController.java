@@ -3,14 +3,17 @@ package com.training.portfolio.web;
 import com.training.portfolio.dto.MarketDtos;
 import com.training.portfolio.service.MarketService;
 import com.training.portfolio.service.PricingService;
+import com.training.portfolio.service.PricingService.TimePrice;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 市场行情控制器
@@ -174,6 +177,73 @@ public class MarketController {
                     "message", "未找到该日期的价格数据"
                 ));
             }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "查询失败: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * 获取股票历史价格走势数据（用于图表）
+     * 使用 Massive API v2 获取日K线数据
+     *
+     * @param ticker 股票代码
+     * @param days 时间范围（30=30天, 180=半年, 365=一年）
+     * @return 历史价格列表 [{date, price}]
+     */
+    @GetMapping("/history/{ticker}")
+    public ResponseEntity<Map<String, Object>> getStockHistory(
+            @PathVariable String ticker,
+            @RequestParam(defaultValue = "30") int days) {
+        try {
+            // 计算日期范围：结束日期为今天的前两天（确保有收盘数据）
+            // 使用固定参考日期 2025-03-31 作为基准，避免系统时间错误导致的问题
+            LocalDate referenceDate = LocalDate.of(2025, 3, 31);
+            LocalDate to = referenceDate.minusDays(2);
+            LocalDate from = to.minusDays(days);
+
+            // 限制最大范围
+            if (days > 365) {
+                days = 365;
+                from = to.minusDays(365);
+            }
+
+            List<TimePrice> series = pricingService.fetchStockHistoricalSeries(ticker, from, to);
+
+            if (series.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("ticker", ticker.toUpperCase());
+                response.put("from", from.toString());
+                response.put("to", to.toString());
+                response.put("days", days);
+                response.put("data", List.of());
+                response.put("found", false);
+                response.put("message", "未找到该股票的历史数据");
+                return ResponseEntity.ok(response);
+            }
+
+            // 转换为前端需要的格式
+            List<Map<String, Object>> data = series.stream()
+                .map(tp -> {
+                    Map<String, Object> point = new HashMap<>();
+                    point.put("date", tp.day().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString());
+                    point.put("price", tp.price());
+                    return point;
+                })
+                .collect(Collectors.toList());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("ticker", ticker.toUpperCase());
+            response.put("from", from.toString());
+            response.put("to", to.toString());
+            response.put("days", days);
+            response.put("data", data);
+            response.put("count", data.size());
+            response.put("found", true);
+
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
                 "error", "查询失败: " + e.getMessage()

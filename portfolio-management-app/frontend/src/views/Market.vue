@@ -66,57 +66,44 @@
       <!-- 涨跌排行 -->
       <div class="movers-grid">
         <section class="card">
-          <h2>{{ t('market.gainers') }}</h2>
+          <h2>{{ t('market.gainers') || '盈利冠军' }}</h2>
           <div v-if="gainers?.length" class="mover-list">
-            <div v-for="(item, idx) in gainers" :key="item.ticker" class="mover-item">
-              <span class="rank">{{ idx + 1 }}</span>
-              <span class="ticker">{{ item.ticker }}</span>
-              <span class="price">{{ fmtMoney(item.currentPrice) }}</span>
-              <span class="change positive">+{{ item.priceChangePercent?.toFixed(2) }}%</span>
+            <div v-for="(item, idx) in gainers" :key="item.ticker" class="mover-item" :class="{ 'champion': idx === 0 }">
+              <span class="rank">
+                <span v-if="idx === 0" class="champion-icon">👑</span>
+                <span v-else>{{ idx + 1 }}</span>
+              </span>
+              <div class="mover-info">
+                <span class="ticker">{{ item.ticker }}</span>
+                <span class="name">{{ item.name }}</span>
+              </div>
+              <div class="mover-pnl">
+                <span class="pnl-value positive">+{{ fmtMoney(item.unrealizedPnl) }}</span>
+                <span class="pnl-percent positive">+{{ item.unrealizedPnlPercent?.toFixed(2) }}%</span>
+              </div>
             </div>
           </div>
-          <p v-else class="empty">{{ t('common.noData') }}</p>
+          <p v-else class="empty">{{ holdingsData?.length ? '暂无盈利持仓' : '请先添加持仓' }}</p>
         </section>
 
         <section class="card">
-          <h2>{{ t('market.losers') }}</h2>
+          <h2>{{ t('market.losers') || '亏损预警' }}</h2>
           <div v-if="losers?.length" class="mover-list">
             <div v-for="(item, idx) in losers" :key="item.ticker" class="mover-item">
               <span class="rank">{{ idx + 1 }}</span>
-              <span class="ticker">{{ item.ticker }}</span>
-              <span class="price">{{ fmtMoney(item.currentPrice) }}</span>
-              <span class="change negative">{{ item.priceChangePercent?.toFixed(2) }}%</span>
+              <div class="mover-info">
+                <span class="ticker">{{ item.ticker }}</span>
+                <span class="name">{{ item.name }}</span>
+              </div>
+              <div class="mover-pnl">
+                <span class="pnl-value negative">{{ fmtMoney(item.unrealizedPnl) }}</span>
+                <span class="pnl-percent negative">{{ item.unrealizedPnlPercent?.toFixed(2) }}%</span>
+              </div>
             </div>
           </div>
-          <p v-else class="empty">{{ t('common.noData') }}</p>
+          <p v-else class="empty">{{ holdingsData?.length ? '暂无亏损持仓' : '请先添加持仓' }}</p>
         </section>
       </div>
-
-      <!-- 热门股票 -->
-      <section class="card">
-        <h2>{{ t('market.popularStocks') }}</h2>
-        <div v-if="popularStocks?.length" class="stock-table">
-          <table>
-            <thead>
-              <tr>
-                <th>{{ t('market.ticker') }}</th>
-                <th>{{ t('market.name') }}</th>
-                <th>{{ t('market.price') }}</th>
-                <th>{{ t('market.source') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="stock in popularStocks" :key="stock.ticker" @click="showDetail(stock.ticker)">
-                <td class="ticker">{{ stock.ticker }}</td>
-                <td>{{ stock.name }}</td>
-                <td class="price">{{ fmtMoney(stock.currentPrice) }}</td>
-                <td class="source">{{ stock.priceSource }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="empty">{{ t('common.noData') }}</p>
-      </section>
 
       <!-- 搜索股票 -->
       <section class="card">
@@ -136,6 +123,30 @@
             <span class="status">{{ searchResult.isAvailable ? t('market.available') : t('market.unavailable') }}</span>
           </div>
         </div>
+      </section>
+
+      <!-- 热门股票 -->
+      <section class="card">
+        <h2>{{ t('market.popularStocks') }}</h2>
+        <div v-if="popularStocks?.length" class="stock-table">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('market.ticker') }}</th>
+                <th>{{ t('market.name') }}</th>
+                <th>{{ t('market.price') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="stock in popularStocks" :key="stock.ticker" @click="showDetail(stock.ticker)">
+                <td class="ticker">{{ stock.ticker }}</td>
+                <td class="company-name">{{ stock.name }}</td>
+                <td class="price">{{ formatPriceWithCurrency(stock.currentPrice, stock.priceSource) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="empty">{{ t('common.noData') }}</p>
       </section>
     </div>
 
@@ -222,6 +233,17 @@ function fmtMoney(v) {
   }).format(Number(v));
 }
 
+// 根据货币类型格式化价格（USD或CNY）
+function formatPriceWithCurrency(price, currency) {
+  if (price == null || Number.isNaN(Number(price))) return '—';
+  const curr = currency === 'CNY' ? 'CNY' : 'USD';
+  return new Intl.NumberFormat('zh-CN', { 
+    style: 'currency', 
+    currency: curr,
+    maximumFractionDigits: 2 
+  }).format(Number(price));
+}
+
 async function loadPortfolios() {
   try {
     portfolios.value = await api.listPortfolios();
@@ -234,20 +256,41 @@ async function loadData() {
   loading.value = true;
   error.value = '';
   try {
+    // 先加载组合列表
     await loadPortfolios();
     
+    // 等待 portfolios 更新后再决定使用哪个组合
+    const effectivePortfolioId = selectedPortfolioId.value || (portfolios.value.length > 0 ? portfolios.value[0].id : null);
+    console.log('Effective portfolio ID:', effectivePortfolioId);
+    
     // 加载持仓行情
-    if (selectedPortfolioId.value) {
-      holdingsData.value = await api.getMyHoldingsMarketData(selectedPortfolioId.value);
-      // 加载涨跌榜
-      const [gainersRes, losersRes] = await Promise.all([
-        api.getTopGainers(selectedPortfolioId.value),
-        api.getTopLosers(selectedPortfolioId.value)
-      ]);
-      gainers.value = gainersRes;
-      losers.value = losersRes;
+    if (effectivePortfolioId) {
+      holdingsData.value = await api.getMyHoldingsMarketData(effectivePortfolioId);
     } else {
       holdingsData.value = await api.getAllHoldingsMarketData();
+    }
+    
+    // 加载涨跌榜
+    if (effectivePortfolioId) {
+      try {
+        console.log('Loading gainers/losers for portfolio:', effectivePortfolioId);
+        const [gainersRes, losersRes] = await Promise.all([
+          api.getTopGainers(effectivePortfolioId),
+          api.getTopLosers(effectivePortfolioId)
+        ]);
+        console.log('Gainers response:', gainersRes);
+        console.log('Losers response:', losersRes);
+        gainers.value = gainersRes || [];
+        losers.value = losersRes || [];
+      } catch (e) {
+        console.error('Failed to load gainers/losers:', e);
+        gainers.value = [];
+        losers.value = [];
+      }
+    } else {
+      console.log('No portfolio available for gainers/losers');
+      gainers.value = [];
+      losers.value = [];
     }
     
     // 加载热门股票
@@ -492,11 +535,22 @@ onMounted(() => {
   padding: 0.75rem;
   background: #f9fafb;
   border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.mover-item:hover {
+  background: #f3f4f6;
+}
+
+.mover-item.champion {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  transform: scale(1.02);
 }
 
 .rank {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -504,6 +558,17 @@ onMounted(() => {
   border-radius: 50%;
   font-size: 0.75rem;
   font-weight: 700;
+  flex-shrink: 0;
+}
+
+.champion-icon {
+  font-size: 1.25rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 .mover-item:first-child .rank {
@@ -518,12 +583,42 @@ onMounted(() => {
   background: #fed7aa;
 }
 
-.mover-item .ticker {
+.mover-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-.mover-item .price {
-  font-family: monospace;
+.mover-info .ticker {
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.mover-info .name {
+  font-size: 0.75rem;
+  color: #6b7280;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mover-pnl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.pnl-value {
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.pnl-percent {
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .stock-table table {
@@ -560,9 +655,13 @@ onMounted(() => {
   font-family: monospace;
 }
 
-.stock-table .source {
-  font-size: 0.75rem;
-  color: #666;
+.stock-table .company-name {
+  font-size: 0.875rem;
+  color: #374151;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search-box {
